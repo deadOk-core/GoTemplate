@@ -73,3 +73,40 @@ func (s *Service) Create(ctx context.Context, params CreateParams) (Trip, error)
 
 	return createdTrip, nil
 }
+
+func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (Trip, error) {
+	foundTrip, err := s.repository.GetByID(ctx, id)
+
+	if err != nil {
+		return Trip{}, fmt.Errorf("get trip: %w", err)
+	}
+
+	return foundTrip, nil
+}
+
+func (s *Service) Finish(ctx context.Context, id uuid.UUID) (Trip, error) {
+	var finishedTrip Trip
+	err := s.txManager.Do(ctx, func(ctx context.Context) error {
+		var err error
+		finishedTrip, err = s.repository.Finish(ctx, id)
+		if err != nil {
+			return err
+		}
+
+		fromStatus := StatusActive
+
+		history := StatusHistory{
+			TripID:     finishedTrip.ID,
+			FromStatus: &fromStatus,
+			ToStatus:   StatusCompleted,
+			Reason:     "trip completed",
+		}
+		return s.repository.AddStatusHistory(ctx, history)
+	})
+
+	if err != nil {
+		return Trip{}, fmt.Errorf("finish trip: %w", err)
+	}
+
+	return finishedTrip, nil
+}

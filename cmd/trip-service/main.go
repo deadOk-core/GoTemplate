@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -14,61 +13,57 @@ import (
 	api "github.com/deadOk-core/GoTemplate/internal/generated"
 	postgres "github.com/deadOk-core/GoTemplate/internal/postgres"
 	"github.com/go-chi/chi/v5"
+
+	"github.com/deadOk-core/GoTemplate/internal/httpapi"
+	"github.com/deadOk-core/GoTemplate/internal/trip"
 )
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	dsn := "postgres://tripgo:tripgo@localhost:21032/tripgo?sslmode=disable"
-	pool, err := postgres.NewPool(ctx, dsn)
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		log.Fatal("DATABASE_URL is required")
+	}
+	pool, err := postgres.NewPool(ctx, databaseURL)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer pool.Close()
 
-	r := chi.NewRouter()
+	// Репозиторий выполняет SQL-запросы к PostgreSQL.
+	repository := trip.NewRepository(pool)
 
-	r.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+	// Менеджер управляет транзакциями и передаёт их через context.
+	txManager := postgres.NewTransactionManager(pool)
 
-		response := api.HealthResponse{Status: api.Ok}
+	// Сервис выполняет бизнес-операции с поездками.
+	service := trip.NewService(repository, txManager)
 
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			http.Error(w, "failed to encode response", http.StatusInternalServerError)
-			return
-		}
-	})
+	// Обработчик связывает HTTP с бизнес-сервисом.
+	handler := httpapi.NewHandler(service, pool)
 
-	r.HandleFunc("GET /ready", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+	// Роутер принимает запросы и выбирает нужный обработчик.
+	router := chi.NewRouter()
 
-		pingCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-		defer cancel()
+	// Регистрируем маршруты, сгенерированные из OpenAPI.
+	api.HandlerWithOptions(
+		handler,
+		api.ChiServerOptions{
+			BaseRouter:       router,
+			ErrorHandlerFunc: httpapi.HandleRequestError,
+		},
+	)
 
-		response := api.HealthResponse{Status: api.Ok}
-		statusCode := http.StatusOK
-
-		if err := pool.Ping(pingCtx); err != nil {
-			response.Status = api.Unavailable
-			statusCode = http.StatusServiceUnavailable
-		}
-
-		w.WriteHeader(statusCode)
-
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			log.Printf("failed to encode ready response: %v", err)
-		}
-	})
-
-	port, ok := os.LookupEnv("HTTP_ADDR")
-	if !ok || port == "" {
-		return
+	httpAddr := os.Getenv("HTTP_ADDR")
+	if httpAddr == "" {
+		log.Fatal("HTTP_ADDR is required")
 	}
 
 	s := http.Server{
-		Addr:              port,
-		Handler:           r,
+		Addr:              httpAddr,
+		Handler:           router,
 		ReadTimeout:       10 * time.Second,
 		ReadHeaderTimeout: 10 * time.Second,
 		WriteTimeout:      10 * time.Second,
@@ -76,7 +71,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("HTTP server is listening on %s", port)
+		log.Printf("HTTP server is listening on %s", httpAddr)
 
 		if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Printf("HTTP server error: %v", err)
