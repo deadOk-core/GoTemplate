@@ -21,10 +21,10 @@ type Repository struct {
 	queryTimeout time.Duration
 }
 
-func NewRepository(pool *pgxpool.Pool) *Repository {
+func NewRepository(pool *pgxpool.Pool, queryTimeout time.Duration) *Repository {
 	return &Repository{
 		pool:         pool,
-		queryTimeout: 5 * time.Second,
+		queryTimeout: queryTimeout,
 	}
 }
 

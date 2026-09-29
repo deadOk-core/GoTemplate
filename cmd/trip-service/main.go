@@ -22,18 +22,39 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		log.Fatal("DATABASE_URL is required")
-	}
-	pool, err := postgres.NewPool(ctx, databaseURL)
+	pool, err := postgres.NewPool(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer pool.Close()
 
+	logLevel := os.Getenv("LOG_LEVEL")
+	if logLevel == "" {
+		log.Fatal("LOG_LEVEL is required")
+	}
+
+	queryTimeoutString := os.Getenv("DATABASE_QUERY_TIMEOUT")
+	if queryTimeoutString == "" {
+		log.Fatal("DATABASE_QUERY_TIMEOUT is required")
+	}
+
+	queryTimeout, err := time.ParseDuration(queryTimeoutString)
+	if err != nil {
+		log.Fatalf("DATABASE_QUERY_TIMEOUT must be a duration: %v", err)
+	}
+
+	shutdownTimeoutString := os.Getenv("SHUTDOWN_TIMEOUT")
+	if shutdownTimeoutString == "" {
+		log.Fatal("SHUTDOWN_TIMEOUT is required")
+	}
+
+	shutdownTimeout, err := time.ParseDuration(shutdownTimeoutString)
+	if err != nil {
+		log.Fatalf("SHUTDOWN_TIMEOUT must be a duration: %v", err)
+	}
+
 	// Репозиторий выполняет SQL-запросы к PostgreSQL.
-	repository := trip.NewRepository(pool)
+	repository := trip.NewRepository(pool, queryTimeout)
 
 	// Менеджер управляет транзакциями и передаёт их через context.
 	txManager := postgres.NewTransactionManager(pool)
@@ -42,7 +63,7 @@ func main() {
 	service := trip.NewService(repository, txManager)
 
 	// Обработчик связывает HTTP с бизнес-сервисом.
-	handler := httpapi.NewHandler(service, pool)
+	handler := httpapi.NewHandler(service, pool, queryTimeout)
 
 	// Роутер принимает запросы и выбирает нужный обработчик.
 	router := chi.NewRouter()
@@ -64,10 +85,10 @@ func main() {
 	s := http.Server{
 		Addr:              httpAddr,
 		Handler:           router,
-		ReadTimeout:       10 * time.Second,
-		ReadHeaderTimeout: 10 * time.Second,
-		WriteTimeout:      10 * time.Second,
-		IdleTimeout:       10 * time.Second,
+		ReadTimeout:       shutdownTimeout,
+		ReadHeaderTimeout: shutdownTimeout,
+		WriteTimeout:      shutdownTimeout,
+		IdleTimeout:       shutdownTimeout,
 	}
 
 	go func() {
@@ -82,7 +103,7 @@ func main() {
 
 	log.Print("shutdown signal received")
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 
 	defer cancel()
 

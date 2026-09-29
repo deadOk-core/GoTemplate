@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"net/http"
-	"time"
 
 	api "github.com/deadOk-core/GoTemplate/internal/generated"
 )
@@ -13,7 +12,7 @@ func (h *Handler) Health(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (h *Handler) Ready(w http.ResponseWriter, r *http.Request) {
-	pingCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	pingCtx, cancel := context.WithTimeout(r.Context(), h.queryTimeout)
 	defer cancel()
 
 	if err := h.pool.Ping(pingCtx); err != nil {

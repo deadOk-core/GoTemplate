@@ -1,20 +1,24 @@
 package httpapi
 
 import (
+	"time"
+
 	api "github.com/deadOk-core/GoTemplate/internal/generated"
 	"github.com/deadOk-core/GoTemplate/internal/trip"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Handler struct {
-	service *trip.Service
-	pool    *pgxpool.Pool
+	service      *trip.Service
+	pool         *pgxpool.Pool
+	queryTimeout time.Duration
 }
 
-func NewHandler(service *trip.Service, pool *pgxpool.Pool) *Handler {
+func NewHandler(service *trip.Service, pool *pgxpool.Pool, queryTimeout time.Duration) *Handler {
 	return &Handler{
-		service: service,
-		pool:    pool,
+		service:      service,
+		pool:         pool,
+		queryTimeout: queryTimeout,
 	}
 }
 
