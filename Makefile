@@ -1,4 +1,4 @@
-.PHONY: generate run migrate migrate-down migrate-status
+.PHONY: generate run test migrate migrate-down migrate-status
 
 generate:
 	go tool oapi-codegen \
@@ -10,6 +10,9 @@ generate:
 
 run:
 	@set -a; . ./.env; set +a; go run ./cmd/trip-service
+
+test:
+	go test -race ./...
 
 migrate:
 	@set -a; . ./.env; set +a; go tool goose -dir migrations postgres "$$DATABASE_URL" up

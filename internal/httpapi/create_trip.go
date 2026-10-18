@@ -1,8 +1,10 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 
@@ -17,7 +19,24 @@ func (h *Handler) CreateTrip(w http.ResponseWriter, r *http.Request, _ api.Creat
 	// Неизвестные поля запрещены контрактом, поэтому включаем их отклонение.
 	var request api.CreateTripJSONRequestBody
 
-	decoder := json.NewDecoder(r.Body)
+	// Сохраняем исходный JSON, потому что после обычного Decode
+	// отсутствующие числовые поля превращаются в нули.
+	body, err := io.ReadAll(r.Body)
+	if err != nil || !hasRequiredTripFields(body) {
+		writeProblem(
+			w,
+			r,
+			http.StatusBadRequest,
+			"https://tripgo.example/problems/invalid-request",
+			"Invalid request",
+			"Request validation failed",
+			"invalid_request",
+		)
+		return
+	}
+
+	// Создаём новый источник чтения из сохранённых байтов.
+	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(&request); err != nil {
@@ -110,4 +129,40 @@ func isCoordinatesValid(coordinates api.Coordinates) bool {
 		coordinates.Latitude <= 90 &&
 		coordinates.Longitude >= -180 &&
 		coordinates.Longitude <= 180
+}
+
+func hasRequiredTripFields(body []byte) bool {
+	var fields map[string]*json.RawMessage
+
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return false
+	}
+
+	requiredFields := []string{
+		"user_id",
+		"driver_id",
+		"start_point",
+		"end_point",
+		"price",
+	}
+
+	for _, name := range requiredFields {
+		if fields[name] == nil {
+			return false
+		}
+	}
+
+	return hasRequiredCoordinateFields(*fields["start_point"]) &&
+		hasRequiredCoordinateFields(*fields["end_point"])
+}
+
+func hasRequiredCoordinateFields(raw json.RawMessage) bool {
+	var fields map[string]*json.RawMessage
+
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return false
+	}
+
+	return fields["latitude"] != nil &&
+		fields["longitude"] != nil
 }

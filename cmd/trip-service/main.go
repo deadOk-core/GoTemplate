@@ -95,7 +95,7 @@ func main() {
 		log.Printf("HTTP server is listening on %s", httpAddr)
 
 		if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("HTTP server error: %v", err)
+			log.Fatalf("HTTP server error: %v", err)
 		}
 	}()
 
