@@ -8,8 +8,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
+	"github.com/deadOk-core/GoTemplate/internal/config"
 	api "github.com/deadOk-core/GoTemplate/internal/generated"
 	postgres "github.com/deadOk-core/GoTemplate/internal/postgres"
 	"github.com/go-chi/chi/v5"
@@ -22,39 +22,19 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := postgres.NewPool(ctx)
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("load configuration: %v", err)
+	}
+
+	pool, err := postgres.NewPool(ctx, cfg.Database)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer pool.Close()
 
-	logLevel := os.Getenv("LOG_LEVEL")
-	if logLevel == "" {
-		log.Fatal("LOG_LEVEL is required")
-	}
-
-	queryTimeoutString := os.Getenv("DATABASE_QUERY_TIMEOUT")
-	if queryTimeoutString == "" {
-		log.Fatal("DATABASE_QUERY_TIMEOUT is required")
-	}
-
-	queryTimeout, err := time.ParseDuration(queryTimeoutString)
-	if err != nil {
-		log.Fatalf("DATABASE_QUERY_TIMEOUT must be a duration: %v", err)
-	}
-
-	shutdownTimeoutString := os.Getenv("SHUTDOWN_TIMEOUT")
-	if shutdownTimeoutString == "" {
-		log.Fatal("SHUTDOWN_TIMEOUT is required")
-	}
-
-	shutdownTimeout, err := time.ParseDuration(shutdownTimeoutString)
-	if err != nil {
-		log.Fatalf("SHUTDOWN_TIMEOUT must be a duration: %v", err)
-	}
-
 	// Репозиторий выполняет SQL-запросы к PostgreSQL.
-	repository := trip.NewRepository(pool, queryTimeout)
+	repository := trip.NewRepository(pool, cfg.Database.QueryTimeout)
 
 	// Менеджер управляет транзакциями и передаёт их через context.
 	txManager := postgres.NewTransactionManager(pool)
@@ -63,7 +43,7 @@ func main() {
 	service := trip.NewService(repository, txManager)
 
 	// Обработчик связывает HTTP с бизнес-сервисом.
-	handler := httpapi.NewHandler(service, pool, queryTimeout)
+	handler := httpapi.NewHandler(service, pool, cfg.Database.QueryTimeout)
 
 	// Роутер принимает запросы и выбирает нужный обработчик.
 	router := chi.NewRouter()
@@ -77,22 +57,17 @@ func main() {
 		},
 	)
 
-	httpAddr := os.Getenv("HTTP_ADDR")
-	if httpAddr == "" {
-		log.Fatal("HTTP_ADDR is required")
-	}
-
 	s := http.Server{
-		Addr:              httpAddr,
+		Addr:              cfg.HTTPAddr,
 		Handler:           router,
-		ReadTimeout:       shutdownTimeout,
-		ReadHeaderTimeout: shutdownTimeout,
-		WriteTimeout:      shutdownTimeout,
-		IdleTimeout:       shutdownTimeout,
+		ReadTimeout:       cfg.ShutdownTimeout,
+		ReadHeaderTimeout: cfg.ShutdownTimeout,
+		WriteTimeout:      cfg.ShutdownTimeout,
+		IdleTimeout:       cfg.ShutdownTimeout,
 	}
 
 	go func() {
-		log.Printf("HTTP server is listening on %s", httpAddr)
+		log.Printf("HTTP server is listening on %s", cfg.HTTPAddr)
 
 		if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("HTTP server error: %v", err)
@@ -103,7 +78,7 @@ func main() {
 
 	log.Print("shutdown signal received")
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 
 	defer cancel()
 
