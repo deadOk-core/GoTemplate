@@ -1,52 +1,18 @@
 package trip
 
 import (
-	"time"
-
-	"github.com/google/uuid"
+	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
+	"github.com/deadOk-core/GoTemplate/internal/model"
 )
 
-type Status string
+type (
+	Status        = domaintrip.Status
+	Trip          = model.Trip
+	StatusHistory = model.StatusHistory
+	CreateParams  = domaintrip.CreateParams
+)
 
 const (
-	StatusActive    Status = "active"
-	StatusCompleted Status = "completed"
+	StatusActive    = domaintrip.StatusActive
+	StatusCompleted = domaintrip.StatusCompleted
 )
-
-type Trip struct {
-	ID       uuid.UUID
-	UserID   uuid.UUID
-	DriverID uuid.UUID
-
-	StartLatitude  float64
-	StartLongitude float64
-	EndLatitude    float64
-	EndLongitude   float64
-
-	Price  int64
-	Status Status
-
-	StartedAt  time.Time
-	FinishedAt *time.Time
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
-}
-
-type StatusHistory struct {
-	TripID     uuid.UUID
-	FromStatus *Status
-	ToStatus   Status
-	Reason     string
-}
-
-type CreateParams struct {
-	UserID   uuid.UUID
-	DriverID uuid.UUID
-
-	StartLatitude  float64
-	StartLongitude float64
-	EndLatitude    float64
-	EndLongitude   float64
-
-	Price int64
-}

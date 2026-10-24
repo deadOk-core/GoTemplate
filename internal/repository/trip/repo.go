@@ -7,14 +7,14 @@ import (
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
-	postgresdb "github.com/deadOk-core/GoTemplate/internal/postgres"
+	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
+	"github.com/deadOk-core/GoTemplate/internal/infra/postgres/transaction"
+	"github.com/deadOk-core/GoTemplate/internal/model"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-var ErrTripNotFound = errors.New("trip not found")
 
 type Repository struct {
 	pool         *pgxpool.Pool
@@ -28,11 +28,11 @@ func NewRepository(pool *pgxpool.Pool, queryTimeout time.Duration) *Repository {
 	}
 }
 
-func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (Trip, error) {
+func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (model.Trip, error) {
 	queryCtx, cancel := context.WithTimeout(ctx, r.queryTimeout)
 	defer cancel()
 
-	db := postgresdb.Executor(queryCtx, r.pool)
+	db := transaction.Executor(queryCtx, r.pool)
 
 	query, args, err := sq.Select(
 		"id",
@@ -51,10 +51,10 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (Trip, error) {
 	).From("trips").Where(sq.Eq{"id": id}).PlaceholderFormat(sq.Dollar).ToSql()
 
 	if err != nil {
-		return Trip{}, fmt.Errorf("build get trip query: %w", err)
+		return model.Trip{}, fmt.Errorf("build get trip query: %w", err)
 	}
 
-	var res Trip
+	var res model.Trip
 
 	err = db.QueryRow(queryCtx, query, args...).Scan(
 		&res.ID,
@@ -73,23 +73,21 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (Trip, error) {
 	)
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Trip{}, ErrTripNotFound
+		return model.Trip{}, domaintrip.ErrTripNotFound
 	}
 
 	if err != nil {
-		return Trip{}, fmt.Errorf("get trip by id: %w", err)
+		return model.Trip{}, fmt.Errorf("get trip by id: %w", err)
 	}
 
 	return res, nil
 }
 
-var ErrDriverBusy = errors.New("driver already has an active trip")
-
-func (r *Repository) Create(ctx context.Context, newTrip Trip) (Trip, error) {
+func (r *Repository) Create(ctx context.Context, newTrip model.Trip) (model.Trip, error) {
 	queryCtx, cancel := context.WithTimeout(ctx, r.queryTimeout)
 	defer cancel()
 
-	db := postgresdb.Executor(queryCtx, r.pool)
+	db := transaction.Executor(queryCtx, r.pool)
 
 	query, args, err := sq.Insert("trips").Columns(
 		"id",
@@ -118,7 +116,7 @@ func (r *Repository) Create(ctx context.Context, newTrip Trip) (Trip, error) {
 	).Suffix("RETURNING created_at, updated_at").PlaceholderFormat(sq.Dollar).ToSql()
 
 	if err != nil {
-		return Trip{}, fmt.Errorf("build create trip query: %w", err)
+		return model.Trip{}, fmt.Errorf("build create trip query: %w", err)
 	}
 
 	err = db.QueryRow(queryCtx, query, args...).Scan(
@@ -130,20 +128,20 @@ func (r *Repository) Create(ctx context.Context, newTrip Trip) (Trip, error) {
 		var pgErr *pgconn.PgError
 
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "trips_one_active_trip_per_driver_idx" {
-			return Trip{}, ErrDriverBusy
+			return model.Trip{}, domaintrip.ErrDriverBusy
 		}
 
-		return Trip{}, fmt.Errorf("create trip: %w", err)
+		return model.Trip{}, fmt.Errorf("create trip: %w", err)
 	}
 
 	return newTrip, nil
 }
 
-func (r *Repository) AddStatusHistory(ctx context.Context, history StatusHistory) error {
+func (r *Repository) AddStatusHistory(ctx context.Context, history model.StatusHistory) error {
 	queryCtx, cancel := context.WithTimeout(ctx, r.queryTimeout)
 	defer cancel()
 
-	db := postgresdb.Executor(queryCtx, r.pool)
+	db := transaction.Executor(queryCtx, r.pool)
 
 	query, args, err := sq.Insert("trip_status_history").Columns(
 		"trip_id",
@@ -168,17 +166,15 @@ func (r *Repository) AddStatusHistory(ctx context.Context, history StatusHistory
 	return nil
 }
 
-var ErrTripCompleted = errors.New("trip already completed")
-
-func (r *Repository) Finish(ctx context.Context, id uuid.UUID) (Trip, error) {
+func (r *Repository) Finish(ctx context.Context, id uuid.UUID) (model.Trip, error) {
 	queryCtx, cancel := context.WithTimeout(ctx, r.queryTimeout)
 	defer cancel()
 
-	db := postgresdb.Executor(queryCtx, r.pool)
+	db := transaction.Executor(queryCtx, r.pool)
 
 	query, args, err := sq.Update("trips").
-		Set("status", StatusCompleted).Set("finished_at", sq.Expr("now()")).Set("updated_at", sq.Expr("now()")).
-		Where(sq.Eq{"id": id, "status": StatusActive}).
+		Set("status", domaintrip.StatusCompleted).Set("finished_at", sq.Expr("now()")).Set("updated_at", sq.Expr("now()")).
+		Where(sq.Eq{"id": id, "status": domaintrip.StatusActive}).
 		Suffix(`
 		RETURNING
 			id,
@@ -197,10 +193,10 @@ func (r *Repository) Finish(ctx context.Context, id uuid.UUID) (Trip, error) {
 		`).PlaceholderFormat(sq.Dollar).ToSql()
 
 	if err != nil {
-		return Trip{}, fmt.Errorf("build finish trip query: %w", err)
+		return model.Trip{}, fmt.Errorf("build finish trip query: %w", err)
 	}
 
-	var finishedTrip Trip
+	var finishedTrip model.Trip
 
 	err = db.QueryRow(queryCtx, query, args...).Scan(
 		&finishedTrip.ID,
@@ -222,21 +218,21 @@ func (r *Repository) Finish(ctx context.Context, id uuid.UUID) (Trip, error) {
 	}
 
 	if !errors.Is(err, pgx.ErrNoRows) {
-		return Trip{}, fmt.Errorf("finish trip: %w", err)
+		return model.Trip{}, fmt.Errorf("finish trip: %w", err)
 	}
 
 	existingTrip, err := r.GetByID(queryCtx, id)
-	if errors.Is(err, ErrTripNotFound) {
-		return Trip{}, ErrTripNotFound
+	if errors.Is(err, domaintrip.ErrTripNotFound) {
+		return model.Trip{}, domaintrip.ErrTripNotFound
 	}
 
 	if err != nil {
-		return Trip{}, fmt.Errorf("check trip after finish: %w", err)
+		return model.Trip{}, fmt.Errorf("check trip after finish: %w", err)
 	}
 
-	if existingTrip.Status == StatusCompleted {
-		return Trip{}, ErrTripCompleted
+	if existingTrip.Status == domaintrip.StatusCompleted {
+		return model.Trip{}, domaintrip.ErrTripCompleted
 	}
 
-	return Trip{}, fmt.Errorf("finish trip: unexpected trip status %q", existingTrip.Status)
+	return model.Trip{}, fmt.Errorf("finish trip: unexpected trip status %q", existingTrip.Status)
 }

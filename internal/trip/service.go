@@ -13,12 +13,12 @@ type TxManager interface {
 }
 
 type Service struct {
-	repository *Repository
+	repository tripRepository
 	txManager  TxManager
 }
 
 func NewService(
-	repository *Repository,
+	repository tripRepository,
 	txManager TxManager,
 ) *Service {
 	return &Service{

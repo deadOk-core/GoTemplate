@@ -11,10 +11,12 @@ import (
 
 	"github.com/deadOk-core/GoTemplate/internal/config"
 	api "github.com/deadOk-core/GoTemplate/internal/generated"
-	postgres "github.com/deadOk-core/GoTemplate/internal/postgres"
+	"github.com/deadOk-core/GoTemplate/internal/infra/postgres"
+	"github.com/deadOk-core/GoTemplate/internal/infra/postgres/transaction"
 	"github.com/go-chi/chi/v5"
 
 	"github.com/deadOk-core/GoTemplate/internal/httpapi"
+	triprepository "github.com/deadOk-core/GoTemplate/internal/repository/trip"
 	"github.com/deadOk-core/GoTemplate/internal/trip"
 )
 
@@ -34,10 +36,10 @@ func main() {
 	defer pool.Close()
 
 	// Репозиторий выполняет SQL-запросы к PostgreSQL.
-	repository := trip.NewRepository(pool, cfg.Database.QueryTimeout)
+	repository := triprepository.NewRepository(pool, cfg.Database.QueryTimeout)
 
 	// Менеджер управляет транзакциями и передаёт их через context.
-	txManager := postgres.NewTransactionManager(pool)
+	txManager := transaction.NewTransactionManager(pool)
 
 	// Сервис выполняет бизнес-операции с поездками.
 	service := trip.NewService(repository, txManager)
