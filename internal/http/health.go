@@ -1,4 +1,4 @@
-package httpapi
+package http
 
 import (
 	"context"
@@ -15,7 +15,7 @@ func (h *Handler) Ready(w http.ResponseWriter, r *http.Request) {
 	pingCtx, cancel := context.WithTimeout(r.Context(), h.queryTimeout)
 	defer cancel()
 
-	if err := h.pool.Ping(pingCtx); err != nil {
+	if err := h.pinger.Ping(pingCtx); err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, api.HealthResponse{Status: api.Unavailable})
 		return
 	}

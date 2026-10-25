@@ -57,18 +57,18 @@ func (mr *MocktripRepositoryMockRecorder) AddStatusHistory(ctx, history any) *go
 }
 
 // Finish mocks base method.
-func (m *MocktripRepository) Finish(ctx context.Context, trip model.Trip) (model.Trip, error) {
+func (m *MocktripRepository) Finish(ctx context.Context, id uuid.UUID) (model.Trip, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Finish", ctx, trip)
+	ret := m.ctrl.Call(m, "Finish", ctx, id)
 	ret0, _ := ret[0].(model.Trip)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Finish indicates an expected call of Finish.
-func (mr *MocktripRepositoryMockRecorder) Finish(ctx, trip any) *gomock.Call {
+func (mr *MocktripRepositoryMockRecorder) Finish(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Finish", reflect.TypeOf((*MocktripRepository)(nil).Finish), ctx, trip)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Finish", reflect.TypeOf((*MocktripRepository)(nil).Finish), ctx, id)
 }
 
 // GetByID mocks base method.

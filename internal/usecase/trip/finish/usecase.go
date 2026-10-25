@@ -40,7 +40,7 @@ func (u *UseCase) Finish(ctx context.Context, id uuid.UUID) (model.Trip, error) 
 			return err
 		}
 
-		finishTrip, err = u.repository.Finish(txCtx, model.FromDomain(entity))
+		finishTrip, err = u.repository.Finish(txCtx, id)
 		if err != nil {
 			return err
 		}

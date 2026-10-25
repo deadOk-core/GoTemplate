@@ -70,25 +70,19 @@ func TestUseCaseFinish(t *testing.T) {
 
 			if tt.wantErr == nil {
 				fromStatus := domaintrip.StatusActive
+				finishedAt := time.Date(2026, 10, 25, 13, 0, 0, 0, time.UTC)
+
+				// Имитируем завершённую поездку, возвращённую репозиторием.
+				savedTrip = input
+				savedTrip.Status = domaintrip.StatusCompleted
+				savedTrip.FinishedAt = &finishedAt
+				savedTrip.UpdatedAt = finishedAt
 
 				gomock.InOrder(
 					getCall,
 					repository.EXPECT().
-						Finish(txCtx, gomock.Any()).
-						DoAndReturn(func(
-							_ context.Context,
-							prepared model.Trip,
-						) (model.Trip, error) {
-							assert.Equal(t, input.ID, prepared.ID)
-							assert.Equal(t, domaintrip.StatusCompleted, prepared.Status)
-							require.NotNil(t, prepared.FinishedAt)
-							assert.False(t, prepared.FinishedAt.IsZero())
-
-							savedTrip = prepared
-							savedTrip.UpdatedAt = time.Date(2026, 10, 24, 13, 0, 0, 0, time.UTC)
-
-							return savedTrip, nil
-						}),
+						Finish(txCtx, input.ID).
+						Return(savedTrip, nil),
 					repository.EXPECT().
 						AddStatusHistory(txCtx, model.StatusHistory{
 							TripID:     input.ID,

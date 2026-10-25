@@ -1,0 +1,14 @@
+//go:generate go tool mockgen -source=contract.go -destination=mocks_test.go -package=get_test
+
+package get
+
+import (
+	"context"
+
+	"github.com/deadOk-core/GoTemplate/internal/model"
+	"github.com/google/uuid"
+)
+
+type tripUseCase interface {
+	GetByID(ctx context.Context, id uuid.UUID) (model.Trip, error)
+}
