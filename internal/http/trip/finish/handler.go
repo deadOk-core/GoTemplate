@@ -2,7 +2,7 @@ package finish
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 
 	api "github.com/deadOk-core/GoTemplate/internal/generated"
@@ -11,11 +11,16 @@ import (
 
 type Handler struct {
 	useCase tripUseCase
+	logger  *slog.Logger
 }
 
-func NewHandler(useCase tripUseCase) *Handler {
+func NewHandler(
+	useCase tripUseCase,
+	logger *slog.Logger,
+) *Handler {
 	return &Handler{
 		useCase: useCase,
+		logger:  logger,
 	}
 }
 
@@ -40,7 +45,11 @@ func (h *Handler) FinishTrip(
 		body = problem
 
 		if status >= http.StatusInternalServerError {
-			log.Printf("finish trip: %v", err)
+			h.logger.ErrorContext(
+				r.Context(),
+				"finish trip failed",
+				"error", err,
+			)
 		}
 	} else {
 		body = toAPITrip(finishedTrip)
@@ -50,6 +59,10 @@ func (h *Handler) FinishTrip(
 	w.WriteHeader(status)
 
 	if err := json.NewEncoder(w).Encode(body); err != nil {
-		log.Printf("encode finish trip response: %v", err)
+		h.logger.ErrorContext(
+			r.Context(),
+			"encode finish trip response failed",
+			"error", err,
+		)
 	}
 }

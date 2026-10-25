@@ -3,6 +3,7 @@ package create
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
@@ -12,12 +13,18 @@ import (
 type UseCase struct {
 	repository tripRepository
 	txManager  txManager
+	logger     *slog.Logger
 }
 
-func NewUseCase(repository tripRepository, txManager txManager) *UseCase {
+func NewUseCase(
+	repository tripRepository,
+	txManager txManager,
+	logger *slog.Logger,
+) *UseCase {
 	return &UseCase{
 		repository: repository,
 		txManager:  txManager,
+		logger:     logger,
 	}
 }
 
@@ -51,6 +58,11 @@ func (u *UseCase) Create(ctx context.Context, params domaintrip.CreateParams) (m
 	if err != nil {
 		return model.Trip{}, fmt.Errorf("create trip: %w", err)
 	}
+	u.logger.InfoContext(
+		ctx,
+		"trip created",
+		"trip_id", createdTrip.ID.String(),
+	)
 
 	return createdTrip, nil
 }

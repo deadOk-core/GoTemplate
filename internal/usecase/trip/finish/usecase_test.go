@@ -2,6 +2,7 @@ package finish_test
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -37,7 +38,7 @@ func TestUseCaseFinish(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			repository := NewMocktripRepository(ctrl)
 			manager := NewMocktxManager(ctrl)
-			useCase := finishusecase.NewUseCase(repository, manager)
+			useCase := finishusecase.NewUseCase(repository, manager, slog.New(slog.DiscardHandler))
 
 			ctx := t.Context()
 			txCtx, cancel := context.WithCancel(ctx)

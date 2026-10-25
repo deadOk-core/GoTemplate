@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,7 +16,18 @@ import (
 
 func main() {
 	if err := run(context.Background()); err != nil {
-		log.Print(err)
+		logger := slog.New(
+			slog.NewJSONHandler(os.Stdout, nil),
+		)
+
+		logger.Error(
+			"application failed",
+			"service", "trip-service",
+			"trace_id", "",
+			"span_id", "",
+			"error", err,
+		)
+
 		os.Exit(1)
 	}
 }
@@ -45,7 +56,11 @@ func run(rootCtx context.Context) error {
 		serverErrors <- app.Server.ListenAndServe()
 	}()
 
-	log.Printf("HTTP server is listening on %s", cfg.HTTPAddr)
+	app.Logger.InfoContext(
+		ctx,
+		"HTTP server started",
+		"address", cfg.HTTPAddr,
+	)
 
 	select {
 	case err := <-serverErrors:
@@ -57,7 +72,7 @@ func run(rootCtx context.Context) error {
 		return nil
 
 	case <-ctx.Done():
-		log.Print("shutdown signal received")
+		app.Logger.InfoContext(rootCtx, "shutdown signal received")
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(
@@ -84,7 +99,7 @@ func run(rootCtx context.Context) error {
 		return fmt.Errorf("application shutdown: %w", shutdownCtx.Err())
 	}
 
-	log.Print("HTTP server stopped")
+	app.Logger.InfoContext(rootCtx, "HTTP server stopped")
 
 	return nil
 }

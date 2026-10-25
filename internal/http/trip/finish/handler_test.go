@@ -2,6 +2,7 @@ package finish_test
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -57,7 +58,7 @@ func TestHandlerFinishTrip(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			useCase := NewMocktripUseCase(ctrl)
-			handler := finishhandler.NewHandler(useCase)
+			handler := finishhandler.NewHandler(useCase, slog.New(slog.DiscardHandler))
 
 			path := "/api/v1/trips/" + tripID.String() + "/finish"
 			request := httptest.NewRequest(http.MethodPost, path, nil).

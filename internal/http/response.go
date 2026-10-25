@@ -1,23 +1,32 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 
 	api "github.com/deadOk-core/GoTemplate/internal/generated"
 )
 
-func writeJSON(w http.ResponseWriter, status int, body any) {
+func (h *Handler) writeJSON(
+	ctx context.Context,
+	w http.ResponseWriter,
+	status int,
+	body any,
+) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 
 	if err := json.NewEncoder(w).Encode(body); err != nil {
-		log.Printf("encode JSON response: %v", err)
+		h.logger.ErrorContext(
+			ctx,
+			"encode JSON response failed",
+			"error", err,
+		)
 	}
 }
 
-func writeProblem(
+func (h *Handler) writeProblem(
 	w http.ResponseWriter,
 	r *http.Request,
 	status int32,
@@ -41,18 +50,22 @@ func writeProblem(
 	w.WriteHeader(int(status))
 
 	if err := json.NewEncoder(w).Encode(problem); err != nil {
-		log.Printf("encode problem response: %v", err)
+		h.logger.ErrorContext(
+			r.Context(),
+			"encode problem response failed",
+			"error", err,
+		)
 	}
 }
 
 // HandleRequestError преобразует ошибки разбора параметров,
 // найденные сгенерированным роутером, в формат RFC 9457.
-func HandleRequestError(
+func (h *Handler) HandleRequestError(
 	w http.ResponseWriter,
 	r *http.Request,
 	_ error,
 ) {
-	writeProblem(
+	h.writeProblem(
 		w,
 		r,
 		http.StatusBadRequest,

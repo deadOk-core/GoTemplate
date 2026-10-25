@@ -1,6 +1,7 @@
 package http
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -13,6 +14,7 @@ type Handler struct {
 	finisher     tripFinisher
 	pinger       databasePinger
 	queryTimeout time.Duration
+	logger       *slog.Logger
 }
 
 func NewHandler(
@@ -21,6 +23,7 @@ func NewHandler(
 	finisher tripFinisher,
 	pinger databasePinger,
 	queryTimeout time.Duration,
+	logger *slog.Logger,
 ) *Handler {
 	return &Handler{
 		creator:      creator,
@@ -28,6 +31,7 @@ func NewHandler(
 		finisher:     finisher,
 		pinger:       pinger,
 		queryTimeout: queryTimeout,
+		logger:       logger,
 	}
 }
 

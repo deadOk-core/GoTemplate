@@ -3,6 +3,7 @@ package create_test
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -20,7 +21,7 @@ func TestUseCaseCreate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repository := NewMocktripRepository(ctrl)
 	manager := NewMocktxManager(ctrl)
-	useCase := createusecase.NewUseCase(repository, manager)
+	useCase := createusecase.NewUseCase(repository, manager, slog.New(slog.DiscardHandler))
 
 	ctx := t.Context()
 	txCtx, cancel := context.WithCancel(ctx)
@@ -140,7 +141,7 @@ func TestUseCaseCreateErrors(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			repository := NewMocktripRepository(ctrl)
 			manager := NewMocktxManager(ctrl)
-			useCase := createusecase.NewUseCase(repository, manager)
+			useCase := createusecase.NewUseCase(repository, manager, slog.New(slog.DiscardHandler))
 
 			// Usecase получает ctx, а репозиторий должен получить именно txCtx,
 			// который менеджер передаёт в callback транзакции.

@@ -3,6 +3,7 @@ package get_test
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -64,7 +65,7 @@ func TestHandlerGetTrip(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			useCase := NewMocktripUseCase(ctrl)
-			handler := gethandler.NewHandler(useCase)
+			handler := gethandler.NewHandler(useCase, slog.New(slog.DiscardHandler))
 
 			path := "/api/v1/trips/" + tripID.String()
 			request := httptest.NewRequest(http.MethodGet, path, nil).

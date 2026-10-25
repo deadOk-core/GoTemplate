@@ -2,7 +2,7 @@ package get
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 
 	api "github.com/deadOk-core/GoTemplate/internal/generated"
@@ -11,11 +11,16 @@ import (
 
 type Handler struct {
 	useCase tripUseCase
+	logger  *slog.Logger
 }
 
-func NewHandler(useCase tripUseCase) *Handler {
+func NewHandler(
+	useCase tripUseCase,
+	logger *slog.Logger,
+) *Handler {
 	return &Handler{
 		useCase: useCase,
+		logger:  logger,
 	}
 }
 
@@ -40,7 +45,11 @@ func (h *Handler) GetTrip(
 		body = problem
 
 		if status >= http.StatusInternalServerError {
-			log.Printf("get trip: %v", err)
+			h.logger.ErrorContext(
+				r.Context(),
+				"get trip failed",
+				"error", err,
+			)
 		}
 	} else {
 		body = toAPITrip(foundTrip)
@@ -50,6 +59,10 @@ func (h *Handler) GetTrip(
 	w.WriteHeader(status)
 
 	if err := json.NewEncoder(w).Encode(body); err != nil {
-		log.Printf("encode get trip response: %v", err)
+		h.logger.ErrorContext(
+			r.Context(),
+			"encode get trip response failed",
+			"error", err,
+		)
 	}
 }

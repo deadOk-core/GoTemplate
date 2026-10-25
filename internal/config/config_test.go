@@ -14,6 +14,7 @@ import (
 const (
 	databaseMaxConnsEnv = "DATABASE_MAX_CONNS"
 	databaseMinConnsEnv = "DATABASE_MIN_CONNS"
+	serviceNameEnv      = "OTEL_SERVICE_NAME"
 )
 
 func setValidEnv(t *testing.T) {
@@ -29,6 +30,7 @@ func setValidEnv(t *testing.T) {
 		"DATABASE_MAX_CONN_LIFETIME": "30m",
 		"DATABASE_CONNECT_TIMEOUT":   "5s",
 		"DATABASE_QUERY_TIMEOUT":     "3s",
+		serviceNameEnv:               "trip-service",
 	}
 
 	for name, value := range values {
@@ -56,6 +58,7 @@ func TestLoad(t *testing.T) {
 			ConnectTimeout:  5 * time.Second,
 			QueryTimeout:    3 * time.Second,
 		},
+		ServiceName: "trip-service",
 	}
 
 	assert.Equal(t, want, got)
@@ -121,6 +124,11 @@ func TestLoadInvalid(t *testing.T) {
 			name:  "minimum exceeds maximum",
 			env:   databaseMinConnsEnv,
 			value: "11",
+		},
+		{
+			name:  "empty service name",
+			env:   serviceNameEnv,
+			value: "",
 		},
 	}
 

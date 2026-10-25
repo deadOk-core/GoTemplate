@@ -10,6 +10,7 @@ import (
 
 type Config struct {
 	HTTPAddr        string
+	ServiceName     string
 	LogLevel        slog.Level
 	ShutdownTimeout time.Duration
 	Database        DatabaseConfig
@@ -29,6 +30,11 @@ func Load() (Config, error) {
 	var err error
 
 	cfg.HTTPAddr, err = required("HTTP_ADDR")
+	if err != nil {
+		return Config{}, err
+	}
+
+	cfg.ServiceName, err = required("OTEL_SERVICE_NAME")
 	if err != nil {
 		return Config{}, err
 	}

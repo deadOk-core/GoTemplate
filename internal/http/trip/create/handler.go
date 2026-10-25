@@ -3,7 +3,7 @@ package create
 import (
 	"encoding/json"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 
 	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
@@ -14,11 +14,16 @@ import (
 
 type Handler struct {
 	useCase tripUseCase
+	logger  *slog.Logger
 }
 
-func NewHandler(useCase tripUseCase) *Handler {
+func NewHandler(
+	useCase tripUseCase,
+	logger *slog.Logger,
+) *Handler {
 	return &Handler{
 		useCase: useCase,
+		logger:  logger,
 	}
 }
 
@@ -60,7 +65,11 @@ func (h *Handler) CreateTrip(
 		body = problem
 
 		if status >= http.StatusInternalServerError {
-			log.Printf("create trip: %v", err)
+			h.logger.ErrorContext(
+				r.Context(),
+				"create trip failed",
+				"error", err,
+			)
 		}
 	} else {
 		w.Header().Set("Location", "/api/v1/trips/"+createdTrip.ID.String())
@@ -71,6 +80,10 @@ func (h *Handler) CreateTrip(
 	w.WriteHeader(status)
 
 	if err := json.NewEncoder(w).Encode(body); err != nil {
-		log.Printf("encode create trip response: %v", err)
+		h.logger.ErrorContext(
+			r.Context(),
+			"encode create trip response failed",
+			"error", err,
+		)
 	}
 }
