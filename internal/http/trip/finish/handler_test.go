@@ -7,14 +7,15 @@ import (
 	"testing"
 	"time"
 
-	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
-	api "github.com/deadOk-core/GoTemplate/internal/generated"
-	finishhandler "github.com/deadOk-core/GoTemplate/internal/http/trip/finish"
-	"github.com/deadOk-core/GoTemplate/internal/model"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+
+	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
+	api "github.com/deadOk-core/GoTemplate/internal/generated"
+	finishhandler "github.com/deadOk-core/GoTemplate/internal/http/trip/finish"
+	"github.com/deadOk-core/GoTemplate/internal/model"
 )
 
 func TestHandlerFinishTrip(t *testing.T) {
@@ -109,7 +110,7 @@ func TestHandlerFinishTrip(t *testing.T) {
 			var body api.Problem
 			require.NoError(t, json.NewDecoder(response.Body).Decode(&body))
 
-			assert.Equal(t, int32(tt.wantStatus), body.Status)
+			assert.Equal(t, tt.wantStatus, int(body.Status))
 			assert.Equal(t, tt.wantCode, body.Code)
 			require.NotNil(t, body.Instance)
 			assert.Equal(t, path, *body.Instance)

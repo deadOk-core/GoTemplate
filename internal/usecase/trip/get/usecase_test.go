@@ -4,13 +4,14 @@ import (
 	"errors"
 	"testing"
 
-	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
-	"github.com/deadOk-core/GoTemplate/internal/model"
-	getusecase "github.com/deadOk-core/GoTemplate/internal/usecase/trip/get"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+
+	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
+	"github.com/deadOk-core/GoTemplate/internal/model"
+	getusecase "github.com/deadOk-core/GoTemplate/internal/usecase/trip/get"
 )
 
 func TestUseCaseGetByID(t *testing.T) {

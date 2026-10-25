@@ -5,13 +5,14 @@ import (
 	"testing"
 	"time"
 
-	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
-	"github.com/deadOk-core/GoTemplate/internal/model"
-	finishusecase "github.com/deadOk-core/GoTemplate/internal/usecase/trip/finish"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+
+	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
+	"github.com/deadOk-core/GoTemplate/internal/model"
+	finishusecase "github.com/deadOk-core/GoTemplate/internal/usecase/trip/finish"
 )
 
 func TestUseCaseFinish(t *testing.T) {

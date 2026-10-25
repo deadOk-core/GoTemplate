@@ -5,9 +5,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/deadOk-core/GoTemplate/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/deadOk-core/GoTemplate/internal/config"
+)
+
+const (
+	databaseMaxConnsEnv = "DATABASE_MAX_CONNS"
+	databaseMinConnsEnv = "DATABASE_MIN_CONNS"
 )
 
 func setValidEnv(t *testing.T) {
@@ -17,9 +23,9 @@ func setValidEnv(t *testing.T) {
 		"HTTP_ADDR":                  ":8080",
 		"LOG_LEVEL":                  "info",
 		"SHUTDOWN_TIMEOUT":           "10s",
-		"DATABASE_URL":               "postgres://test:test@localhost/test",
-		"DATABASE_MAX_CONNS":         "10",
-		"DATABASE_MIN_CONNS":         "2",
+		"DATABASE_URL":               "postgres://test@localhost/test",
+		databaseMaxConnsEnv:          "10",
+		databaseMinConnsEnv:          "2",
 		"DATABASE_MAX_CONN_LIFETIME": "30m",
 		"DATABASE_CONNECT_TIMEOUT":   "5s",
 		"DATABASE_QUERY_TIMEOUT":     "3s",
@@ -43,7 +49,7 @@ func TestLoad(t *testing.T) {
 		LogLevel:        slog.LevelInfo,
 		ShutdownTimeout: 10 * time.Second,
 		Database: config.DatabaseConfig{
-			URL:             "postgres://test:test@localhost/test",
+			URL:             "postgres://test@localhost/test",
 			MaxConns:        10,
 			MinConns:        2,
 			MaxConnLifetime: 30 * time.Minute,
@@ -93,27 +99,27 @@ func TestLoadInvalid(t *testing.T) {
 		},
 		{
 			name:  "invalid connection count",
-			env:   "DATABASE_MAX_CONNS",
+			env:   databaseMaxConnsEnv,
 			value: "ten",
 		},
 		{
 			name:  "connection count overflow",
-			env:   "DATABASE_MAX_CONNS",
+			env:   databaseMaxConnsEnv,
 			value: "2147483648",
 		},
 		{
 			name:  "zero maximum connections",
-			env:   "DATABASE_MAX_CONNS",
+			env:   databaseMaxConnsEnv,
 			value: "0",
 		},
 		{
 			name:  "negative minimum connections",
-			env:   "DATABASE_MIN_CONNS",
+			env:   databaseMinConnsEnv,
 			value: "-1",
 		},
 		{
 			name:  "minimum exceeds maximum",
-			env:   "DATABASE_MIN_CONNS",
+			env:   databaseMinConnsEnv,
 			value: "11",
 		},
 	}
@@ -134,7 +140,7 @@ func TestLoadInvalid(t *testing.T) {
 
 func TestLoadZeroMinConns(t *testing.T) {
 	setValidEnv(t)
-	t.Setenv("DATABASE_MIN_CONNS", "0")
+	t.Setenv(databaseMinConnsEnv, "0")
 
 	got, err := config.Load()
 

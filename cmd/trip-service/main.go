@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -14,19 +15,29 @@ import (
 )
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	if err := run(context.Background()); err != nil {
+		log.Print(err)
+		os.Exit(1)
+	}
+}
+
+func run(rootCtx context.Context) error {
+	ctx, stop := signal.NotifyContext(
+		rootCtx,
+		os.Interrupt,
+		syscall.SIGTERM,
+	)
 	defer stop()
 
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("load configuration: %v", err)
+		return fmt.Errorf("load configuration: %w", err)
 	}
 
 	app, err := container.NewContainer(ctx, cfg)
 	if err != nil {
-		log.Fatalf("create application: %v", err)
+		return fmt.Errorf("create application: %w", err)
 	}
-	defer app.Close()
 
 	serverErrors := make(chan error, 1)
 
@@ -38,22 +49,42 @@ func main() {
 
 	select {
 	case err := <-serverErrors:
+		app.Close()
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			app.Close()
-			log.Fatalf("HTTP server error: %v", err)
+			return fmt.Errorf("HTTP server error: %w", err)
 		}
+
+		return nil
 
 	case <-ctx.Done():
 		log.Print("shutdown signal received")
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+	shutdownCtx, cancel := context.WithTimeout(
+		rootCtx,
+		cfg.ShutdownTimeout,
+	)
 	defer cancel()
 
-	if err := app.Server.Shutdown(shutdownCtx); err != nil {
-		log.Printf("HTTP server shutdown error: %v", err)
-		os.Exit(1)
+	shutdownDone := make(chan error, 1)
+
+	go func() {
+		err := app.Server.Shutdown(shutdownCtx)
+		app.Close()
+		shutdownDone <- err
+	}()
+
+	select {
+	case err := <-shutdownDone:
+		if err != nil {
+			return fmt.Errorf("application shutdown: %w", err)
+		}
+
+	case <-shutdownCtx.Done():
+		return fmt.Errorf("application shutdown: %w", shutdownCtx.Err())
 	}
 
 	log.Print("HTTP server stopped")
+
+	return nil
 }

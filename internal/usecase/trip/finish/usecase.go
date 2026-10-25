@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/deadOk-core/GoTemplate/internal/model"
 	"github.com/google/uuid"
+
+	"github.com/deadOk-core/GoTemplate/internal/model"
 )
 
 type UseCase struct {

@@ -3,10 +3,11 @@ package trip_test
 import (
 	"testing"
 
-	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
 )
 
 func TestCreateParamsValidate(t *testing.T) {

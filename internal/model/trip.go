@@ -3,8 +3,9 @@ package model
 import (
 	"time"
 
-	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
 	"github.com/google/uuid"
+
+	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
 )
 
 type Trip struct {

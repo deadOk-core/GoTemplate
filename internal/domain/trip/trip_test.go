@@ -4,9 +4,10 @@ import (
 	"testing"
 	"time"
 
-	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
 )
 
 func TestTripFinish(t *testing.T) {

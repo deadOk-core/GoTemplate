@@ -69,7 +69,6 @@ func (m *TransactionManager) Do(ctx context.Context, fn func(ctx context.Context
 	// Commit прошёл успешно, поэтому отложенный Rollback больше не нужен.
 	committed = true
 	return nil
-
 }
 
 func Executor(ctx context.Context, pool *pgxpool.Pool) DBTX {

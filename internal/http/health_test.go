@@ -7,10 +7,11 @@ import (
 	"testing"
 	"time"
 
-	httpapi "github.com/deadOk-core/GoTemplate/internal/http"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+
+	httpapi "github.com/deadOk-core/GoTemplate/internal/http"
 )
 
 func TestHandlerReady(t *testing.T) {

@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/deadOk-core/GoTemplate/internal/config"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/deadOk-core/GoTemplate/internal/config"
 )
 
 func NewPool(ctx context.Context, cfg config.DatabaseConfig) (*pgxpool.Pool, error) {

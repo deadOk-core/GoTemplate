@@ -4,10 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 
+	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
 	api "github.com/deadOk-core/GoTemplate/internal/generated"
 	"github.com/deadOk-core/GoTemplate/internal/model"
-
-	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
 )
 
 func toAPITrip(input model.Trip) api.Trip {

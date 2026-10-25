@@ -5,8 +5,9 @@ package get
 import (
 	"context"
 
-	"github.com/deadOk-core/GoTemplate/internal/model"
 	"github.com/google/uuid"
+
+	"github.com/deadOk-core/GoTemplate/internal/model"
 )
 
 type tripRepository interface {

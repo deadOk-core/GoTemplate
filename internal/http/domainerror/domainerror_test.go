@@ -6,10 +6,11 @@ import (
 	"net/http"
 	"testing"
 
-	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
-	"github.com/deadOk-core/GoTemplate/internal/http/domainerror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
+	"github.com/deadOk-core/GoTemplate/internal/http/domainerror"
 )
 
 func TestProblem(t *testing.T) {
@@ -65,7 +66,7 @@ func TestProblem(t *testing.T) {
 			status, body := domainerror.Problem(tt.err)
 
 			assert.Equal(t, tt.wantStatus, status)
-			assert.Equal(t, int32(tt.wantStatus), body.Status)
+			assert.Equal(t, tt.wantStatus, int(body.Status))
 			assert.Equal(t, tt.wantCode, body.Code)
 
 			require.NotNil(t, body.Detail)

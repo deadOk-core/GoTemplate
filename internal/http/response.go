@@ -20,7 +20,7 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 func writeProblem(
 	w http.ResponseWriter,
 	r *http.Request,
-	status int,
+	status int32,
 	problemType string,
 	title string,
 	detail string,
@@ -32,13 +32,13 @@ func writeProblem(
 		Code:     code,
 		Detail:   &detail,
 		Instance: &instance,
-		Status:   int32(status),
+		Status:   status,
 		Title:    title,
 		Type:     problemType,
 	}
 
 	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(status)
+	w.WriteHeader(int(status))
 
 	if err := json.NewEncoder(w).Encode(problem); err != nil {
 		log.Printf("encode problem response: %v", err)

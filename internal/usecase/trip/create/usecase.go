@@ -48,11 +48,9 @@ func (u *UseCase) Create(ctx context.Context, params domaintrip.CreateParams) (m
 
 		return nil
 	})
-
 	if err != nil {
 		return model.Trip{}, fmt.Errorf("create trip: %w", err)
 	}
 
 	return createdTrip, nil
-
 }

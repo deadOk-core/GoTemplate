@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/deadOk-core/GoTemplate/internal/config"
 	api "github.com/deadOk-core/GoTemplate/internal/generated"
 	httpapi "github.com/deadOk-core/GoTemplate/internal/http"
@@ -17,8 +20,6 @@ import (
 	createusecase "github.com/deadOk-core/GoTemplate/internal/usecase/trip/create"
 	finishusecase "github.com/deadOk-core/GoTemplate/internal/usecase/trip/finish"
 	getusecase "github.com/deadOk-core/GoTemplate/internal/usecase/trip/get"
-	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Container struct {

@@ -6,13 +6,14 @@ import (
 	"testing"
 	"time"
 
-	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
-	"github.com/deadOk-core/GoTemplate/internal/model"
-	createusecase "github.com/deadOk-core/GoTemplate/internal/usecase/trip/create"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+
+	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
+	"github.com/deadOk-core/GoTemplate/internal/model"
+	createusecase "github.com/deadOk-core/GoTemplate/internal/usecase/trip/create"
 )
 
 func TestUseCaseCreate(t *testing.T) {

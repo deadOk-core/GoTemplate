@@ -70,7 +70,6 @@ func (p *CreateParams) Validate() error {
 	}
 
 	return nil
-
 }
 
 func validateCoordinates(field string, latitude, longitude float64) error {

@@ -9,15 +9,18 @@ import (
 	"testing"
 	"time"
 
-	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
-	api "github.com/deadOk-core/GoTemplate/internal/generated"
-	createhandler "github.com/deadOk-core/GoTemplate/internal/http/trip/create"
-	"github.com/deadOk-core/GoTemplate/internal/model"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+
+	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
+	api "github.com/deadOk-core/GoTemplate/internal/generated"
+	createhandler "github.com/deadOk-core/GoTemplate/internal/http/trip/create"
+	"github.com/deadOk-core/GoTemplate/internal/model"
 )
+
+const invalidRequestCode = "invalid_request"
 
 func TestHandlerCreateTrip(t *testing.T) {
 	userID := uuid.New()
@@ -66,25 +69,25 @@ func TestHandlerCreateTrip(t *testing.T) {
 			name:       "invalid JSON",
 			body:       "{",
 			wantStatus: http.StatusBadRequest,
-			wantCode:   "invalid_request",
+			wantCode:   invalidRequestCode,
 		},
 		{
 			name:       "missing price",
 			body:       strings.Replace(validBody, `"price":1500,`, "", 1),
 			wantStatus: http.StatusBadRequest,
-			wantCode:   "invalid_request",
+			wantCode:   invalidRequestCode,
 		},
 		{
 			name:       "null price",
 			body:       strings.Replace(validBody, `"price":1500`, `"price":null`, 1),
 			wantStatus: http.StatusBadRequest,
-			wantCode:   "invalid_request",
+			wantCode:   invalidRequestCode,
 		},
 		{
 			name:       "missing latitude",
 			body:       strings.Replace(validBody, `"latitude":55.75,`, "", 1),
 			wantStatus: http.StatusBadRequest,
-			wantCode:   "invalid_request",
+			wantCode:   invalidRequestCode,
 		},
 	}
 
@@ -186,7 +189,7 @@ func TestHandlerCreateTrip(t *testing.T) {
 			var body api.Problem
 			require.NoError(t, json.NewDecoder(response.Body).Decode(&body))
 
-			assert.Equal(t, int32(tt.wantStatus), body.Status)
+			assert.Equal(t, tt.wantStatus, int(body.Status))
 			assert.Equal(t, tt.wantCode, body.Code)
 			require.NotNil(t, body.Instance)
 			assert.Equal(t, path, *body.Instance)

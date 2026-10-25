@@ -9,14 +9,15 @@ import (
 	"testing"
 	"time"
 
-	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
-	"github.com/deadOk-core/GoTemplate/internal/infra/postgres/transaction"
-	"github.com/deadOk-core/GoTemplate/internal/model"
-	triprepository "github.com/deadOk-core/GoTemplate/internal/repository/trip"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
+	"github.com/deadOk-core/GoTemplate/internal/infra/postgres/transaction"
+	"github.com/deadOk-core/GoTemplate/internal/model"
+	triprepository "github.com/deadOk-core/GoTemplate/internal/repository/trip"
 )
 
 func newTestRepository(t *testing.T) (*pgxpool.Pool, *triprepository.Repository) {

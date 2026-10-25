@@ -7,13 +7,14 @@ import (
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
-	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
-	"github.com/deadOk-core/GoTemplate/internal/infra/postgres/transaction"
-	"github.com/deadOk-core/GoTemplate/internal/model"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
+	"github.com/deadOk-core/GoTemplate/internal/infra/postgres/transaction"
+	"github.com/deadOk-core/GoTemplate/internal/model"
 )
 
 type Repository struct {
@@ -49,7 +50,6 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (model.Trip, err
 		"created_at",
 		"updated_at",
 	).From("trips").Where(sq.Eq{"id": id}).PlaceholderFormat(sq.Dollar).ToSql()
-
 	if err != nil {
 		return model.Trip{}, fmt.Errorf("build get trip query: %w", err)
 	}
@@ -114,7 +114,6 @@ func (r *Repository) Create(ctx context.Context, newTrip model.Trip) (model.Trip
 		newTrip.StartedAt,
 		nil,
 	).Suffix("RETURNING created_at, updated_at").PlaceholderFormat(sq.Dollar).ToSql()
-
 	if err != nil {
 		return model.Trip{}, fmt.Errorf("build create trip query: %w", err)
 	}
@@ -123,7 +122,6 @@ func (r *Repository) Create(ctx context.Context, newTrip model.Trip) (model.Trip
 		&newTrip.CreatedAt,
 		&newTrip.UpdatedAt,
 	)
-
 	if err != nil {
 		var pgErr *pgconn.PgError
 
@@ -154,7 +152,6 @@ func (r *Repository) AddStatusHistory(ctx context.Context, history model.StatusH
 		history.ToStatus,
 		history.Reason,
 	).PlaceholderFormat(sq.Dollar).ToSql()
-
 	if err != nil {
 		return fmt.Errorf("build add status history query: %w", err)
 	}
@@ -191,7 +188,6 @@ func (r *Repository) Finish(ctx context.Context, id uuid.UUID) (model.Trip, erro
 			created_at,
 			updated_at
 		`).PlaceholderFormat(sq.Dollar).ToSql()
-
 	if err != nil {
 		return model.Trip{}, fmt.Errorf("build finish trip query: %w", err)
 	}
