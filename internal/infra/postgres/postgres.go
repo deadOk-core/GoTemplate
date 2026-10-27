@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel"
 
 	"github.com/deadOk-core/GoTemplate/internal/config"
 )
@@ -19,6 +20,10 @@ func NewPool(ctx context.Context, cfg config.DatabaseConfig) (*pgxpool.Pool, err
 	poolConfig.MinConns = cfg.MinConns
 	poolConfig.MaxConnLifetime = cfg.MaxConnLifetime
 	poolConfig.ConnConfig.ConnectTimeout = cfg.ConnectTimeout
+	poolConfig.ConnConfig.Tracer, err = newQueryTracer(otel.GetMeterProvider())
+	if err != nil {
+		return nil, err
+	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {

@@ -21,9 +21,11 @@ func TestUseCaseCreate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repository := NewMocktripRepository(ctrl)
 	manager := NewMocktxManager(ctrl)
-	useCase := createusecase.NewUseCase(repository, manager, slog.New(slog.DiscardHandler))
+	counter := NewMocktripCounter(ctrl)
+	useCase := createusecase.NewUseCase(repository, manager, slog.New(slog.DiscardHandler), counter)
 
 	ctx := t.Context()
+	counter.EXPECT().Add(ctx, int64(1))
 	txCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -141,7 +143,8 @@ func TestUseCaseCreateErrors(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			repository := NewMocktripRepository(ctrl)
 			manager := NewMocktxManager(ctrl)
-			useCase := createusecase.NewUseCase(repository, manager, slog.New(slog.DiscardHandler))
+			counter := NewMocktripCounter(ctrl)
+			useCase := createusecase.NewUseCase(repository, manager, slog.New(slog.DiscardHandler), counter)
 
 			// Usecase получает ctx, а репозиторий должен получить именно txCtx,
 			// который менеджер передаёт в callback транзакции.

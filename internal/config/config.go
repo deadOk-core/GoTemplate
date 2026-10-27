@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -14,6 +15,8 @@ type Config struct {
 	LogLevel        slog.Level
 	ShutdownTimeout time.Duration
 	Database        DatabaseConfig
+	OTLPEndpoint    string
+	OTLPProtocol    string
 }
 
 type DatabaseConfig struct {
@@ -37,6 +40,38 @@ func Load() (Config, error) {
 	cfg.ServiceName, err = required("OTEL_SERVICE_NAME")
 	if err != nil {
 		return Config{}, err
+	}
+
+	cfg.OTLPEndpoint, err = required("OTEL_EXPORTER_OTLP_ENDPOINT")
+	if err != nil {
+		return Config{}, err
+	}
+
+	endpoint, err := url.ParseRequestURI(cfg.OTLPEndpoint)
+	if err != nil || endpoint.Host == "" ||
+		(endpoint.Scheme != "http" && endpoint.Scheme != "https") {
+		return Config{}, fmt.Errorf(
+			"ENV OTEL_EXPORTER_OTLP_ENDPOINT must be an HTTP(S) URL",
+		)
+	}
+
+	cfg.OTLPProtocol, err = required("OTEL_EXPORTER_OTLP_PROTOCOL")
+	if err != nil {
+		return Config{}, err
+	}
+	if cfg.OTLPProtocol != "http/protobuf" {
+		return Config{}, fmt.Errorf(
+			"ENV OTEL_EXPORTER_OTLP_PROTOCOL must be http/protobuf",
+		)
+	}
+
+	for _, name := range []string{
+		"OTEL_RESOURCE_ATTRIBUTES",
+		"OTEL_TRACES_SAMPLER",
+	} {
+		if _, err := required(name); err != nil {
+			return Config{}, err
+		}
 	}
 
 	logLevel, err := required("LOG_LEVEL")

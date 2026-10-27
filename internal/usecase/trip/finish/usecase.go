@@ -15,17 +15,20 @@ type UseCase struct {
 	repository tripRepository
 	txManager  txManager
 	logger     *slog.Logger
+	completed  tripCounter
 }
 
 func NewUseCase(
 	repository tripRepository,
 	txManager txManager,
 	logger *slog.Logger,
+	completed tripCounter,
 ) *UseCase {
 	return &UseCase{
 		repository: repository,
 		txManager:  txManager,
 		logger:     logger,
+		completed:  completed,
 	}
 }
 
@@ -65,6 +68,7 @@ func (u *UseCase) Finish(ctx context.Context, id uuid.UUID) (model.Trip, error) 
 	if err != nil {
 		return model.Trip{}, fmt.Errorf("finish trip: %w", err)
 	}
+	u.completed.Add(ctx, 1)
 	u.logger.InfoContext(
 		ctx,
 		"trip completed",

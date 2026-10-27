@@ -14,17 +14,20 @@ type UseCase struct {
 	repository tripRepository
 	txManager  txManager
 	logger     *slog.Logger
+	created    tripCounter
 }
 
 func NewUseCase(
 	repository tripRepository,
 	txManager txManager,
 	logger *slog.Logger,
+	created tripCounter,
 ) *UseCase {
 	return &UseCase{
 		repository: repository,
 		txManager:  txManager,
 		logger:     logger,
+		created:    created,
 	}
 }
 
@@ -58,6 +61,7 @@ func (u *UseCase) Create(ctx context.Context, params domaintrip.CreateParams) (m
 	if err != nil {
 		return model.Trip{}, fmt.Errorf("create trip: %w", err)
 	}
+	u.created.Add(ctx, 1)
 	u.logger.InfoContext(
 		ctx,
 		"trip created",

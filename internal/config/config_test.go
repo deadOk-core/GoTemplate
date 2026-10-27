@@ -12,9 +12,13 @@ import (
 )
 
 const (
-	databaseMaxConnsEnv = "DATABASE_MAX_CONNS"
-	databaseMinConnsEnv = "DATABASE_MIN_CONNS"
-	serviceNameEnv      = "OTEL_SERVICE_NAME"
+	databaseMaxConnsEnv       = "DATABASE_MAX_CONNS"
+	databaseMinConnsEnv       = "DATABASE_MIN_CONNS"
+	serviceNameEnv            = "OTEL_SERVICE_NAME"
+	otelEndpointEnv           = "OTEL_EXPORTER_OTLP_ENDPOINT"
+	otelProtocolEnv           = "OTEL_EXPORTER_OTLP_PROTOCOL"
+	otelResourceAttributesEnv = "OTEL_RESOURCE_ATTRIBUTES"
+	otelSamplerEnv            = "OTEL_TRACES_SAMPLER"
 )
 
 func setValidEnv(t *testing.T) {
@@ -31,6 +35,10 @@ func setValidEnv(t *testing.T) {
 		"DATABASE_CONNECT_TIMEOUT":   "5s",
 		"DATABASE_QUERY_TIMEOUT":     "3s",
 		serviceNameEnv:               "trip-service",
+		otelEndpointEnv:              "http://localhost:4318",
+		otelProtocolEnv:              "http/protobuf",
+		otelResourceAttributesEnv:    "service.namespace=tripgo,deployment.environment=local",
+		otelSamplerEnv:               "parentbased_always_on",
 	}
 
 	for name, value := range values {
@@ -58,7 +66,9 @@ func TestLoad(t *testing.T) {
 			ConnectTimeout:  5 * time.Second,
 			QueryTimeout:    3 * time.Second,
 		},
-		ServiceName: "trip-service",
+		ServiceName:  "trip-service",
+		OTLPEndpoint: "http://localhost:4318",
+		OTLPProtocol: "http/protobuf",
 	}
 
 	assert.Equal(t, want, got)
@@ -128,6 +138,36 @@ func TestLoadInvalid(t *testing.T) {
 		{
 			name:  "empty service name",
 			env:   serviceNameEnv,
+			value: "",
+		},
+		{
+			name:  "empty OTLP endpoint",
+			env:   otelEndpointEnv,
+			value: "",
+		},
+		{
+			name:  "invalid OTLP endpoint",
+			env:   otelEndpointEnv,
+			value: "localhost:4318",
+		},
+		{
+			name:  "empty OTLP protocol",
+			env:   otelProtocolEnv,
+			value: "",
+		},
+		{
+			name:  "unsupported OTLP protocol",
+			env:   otelProtocolEnv,
+			value: "grpc",
+		},
+		{
+			name:  "empty resource attributes",
+			env:   otelResourceAttributesEnv,
+			value: "",
+		},
+		{
+			name:  "empty trace sampler",
+			env:   otelSamplerEnv,
 			value: "",
 		},
 	}

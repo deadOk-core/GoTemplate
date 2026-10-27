@@ -2,6 +2,7 @@ package finish_test
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"testing"
 	"time"
@@ -17,10 +18,12 @@ import (
 )
 
 func TestUseCaseFinish(t *testing.T) {
+	commitErr := errors.New("cannot commit transaction")
 	tests := []struct {
-		name    string
-		status  domaintrip.Status
-		wantErr error
+		name      string
+		status    domaintrip.Status
+		wantErr   error
+		commitErr error
 	}{
 		{
 			name:   "active trip",
@@ -31,6 +34,12 @@ func TestUseCaseFinish(t *testing.T) {
 			status:  domaintrip.StatusCompleted,
 			wantErr: domaintrip.ErrTripCompleted,
 		},
+		{
+			name:      "commit error does not increment metric",
+			status:    domaintrip.StatusActive,
+			wantErr:   commitErr,
+			commitErr: commitErr,
+		},
 	}
 
 	for _, tt := range tests {
@@ -38,9 +47,13 @@ func TestUseCaseFinish(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			repository := NewMocktripRepository(ctrl)
 			manager := NewMocktxManager(ctrl)
-			useCase := finishusecase.NewUseCase(repository, manager, slog.New(slog.DiscardHandler))
+			counter := NewMocktripCounter(ctrl)
+			useCase := finishusecase.NewUseCase(repository, manager, slog.New(slog.DiscardHandler), counter)
 
 			ctx := t.Context()
+			if tt.wantErr == nil {
+				counter.EXPECT().Add(ctx, int64(1))
+			}
 			txCtx, cancel := context.WithCancel(ctx)
 			defer cancel()
 
@@ -63,14 +76,17 @@ func TestUseCaseFinish(t *testing.T) {
 					_ context.Context,
 					fn func(context.Context) error,
 				) error {
-					return fn(txCtx)
+					if err := fn(txCtx); err != nil {
+						return err
+					}
+					return tt.commitErr
 				})
 
 			getCall := repository.EXPECT().
 				GetByID(txCtx, input.ID).
 				Return(input, nil)
 
-			if tt.wantErr == nil {
+			if tt.status == domaintrip.StatusActive {
 				fromStatus := domaintrip.StatusActive
 				finishedAt := time.Date(2026, 10, 25, 13, 0, 0, 0, time.UTC)
 

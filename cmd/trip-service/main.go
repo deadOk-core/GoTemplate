@@ -62,14 +62,16 @@ func run(rootCtx context.Context) error {
 		"address", cfg.HTTPAddr,
 	)
 
-	select {
-	case err := <-serverErrors:
-		app.Close()
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("HTTP server error: %w", err)
-		}
+	var serveErr error
 
-		return nil
+	select {
+	case serveErr = <-serverErrors:
+		if errors.Is(serveErr, http.ErrServerClosed) {
+			serveErr = nil
+		}
+		if serveErr != nil {
+			serveErr = fmt.Errorf("HTTP server error: %w", serveErr)
+		}
 
 	case <-ctx.Done():
 		app.Logger.InfoContext(rootCtx, "shutdown signal received")
@@ -84,19 +86,23 @@ func run(rootCtx context.Context) error {
 	shutdownDone := make(chan error, 1)
 
 	go func() {
-		err := app.Server.Shutdown(shutdownCtx)
-		app.Close()
-		shutdownDone <- err
+		httpErr := app.Server.Shutdown(shutdownCtx)
+		closeErr := app.Close(shutdownCtx)
+		shutdownDone <- errors.Join(httpErr, closeErr)
 	}()
 
 	select {
 	case err := <-shutdownDone:
 		if err != nil {
-			return fmt.Errorf("application shutdown: %w", err)
+			return errors.Join(serveErr, fmt.Errorf("application shutdown: %w", err))
 		}
 
 	case <-shutdownCtx.Done():
-		return fmt.Errorf("application shutdown: %w", shutdownCtx.Err())
+		return errors.Join(serveErr, fmt.Errorf("application shutdown: %w", shutdownCtx.Err()))
+	}
+
+	if serveErr != nil {
+		return serveErr
 	}
 
 	app.Logger.InfoContext(rootCtx, "HTTP server stopped")

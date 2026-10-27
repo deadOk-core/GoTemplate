@@ -5,6 +5,8 @@ package create
 import (
 	"context"
 
+	"go.opentelemetry.io/otel/metric"
+
 	"github.com/deadOk-core/GoTemplate/internal/model"
 )
 
@@ -15,4 +17,8 @@ type tripRepository interface {
 
 type txManager interface {
 	Do(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
+type tripCounter interface {
+	Add(ctx context.Context, value int64, options ...metric.AddOption)
 }

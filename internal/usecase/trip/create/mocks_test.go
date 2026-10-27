@@ -14,6 +14,7 @@ import (
 	reflect "reflect"
 
 	model "github.com/deadOk-core/GoTemplate/internal/model"
+	metric "go.opentelemetry.io/otel/metric"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -106,4 +107,45 @@ func (m *MocktxManager) Do(ctx context.Context, fn func(context.Context) error) 
 func (mr *MocktxManagerMockRecorder) Do(ctx, fn any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Do", reflect.TypeOf((*MocktxManager)(nil).Do), ctx, fn)
+}
+
+// MocktripCounter is a mock of tripCounter interface.
+type MocktripCounter struct {
+	ctrl     *gomock.Controller
+	recorder *MocktripCounterMockRecorder
+	isgomock struct{}
+}
+
+// MocktripCounterMockRecorder is the mock recorder for MocktripCounter.
+type MocktripCounterMockRecorder struct {
+	mock *MocktripCounter
+}
+
+// NewMocktripCounter creates a new mock instance.
+func NewMocktripCounter(ctrl *gomock.Controller) *MocktripCounter {
+	mock := &MocktripCounter{ctrl: ctrl}
+	mock.recorder = &MocktripCounterMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocktripCounter) EXPECT() *MocktripCounterMockRecorder {
+	return m.recorder
+}
+
+// Add mocks base method.
+func (m *MocktripCounter) Add(ctx context.Context, value int64, options ...metric.AddOption) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, value}
+	for _, a := range options {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "Add", varargs...)
+}
+
+// Add indicates an expected call of Add.
+func (mr *MocktripCounterMockRecorder) Add(ctx, value any, options ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, value}, options...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MocktripCounter)(nil).Add), varargs...)
 }
