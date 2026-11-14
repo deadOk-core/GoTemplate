@@ -1,0 +1,21 @@
+# Git
+.git
+.gitignore
+
+# Локальная конфигурация
+.env
+.env.*
+.tripgo
+environment.toml
+
+# Результаты сборки и временные файлы
+.work
+bin
+
+# Тесты
+**/*_test.go
+
+# Документация и служебные инструкции
+README.md
+LAB1_PLAN.md
+AGENTS.md
