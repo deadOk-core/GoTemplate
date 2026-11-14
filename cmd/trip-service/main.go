@@ -26,7 +26,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer pool.Close()
 
 	logLevel := os.Getenv("LOG_LEVEL")
 	if logLevel == "" {
@@ -101,15 +100,27 @@ func main() {
 
 	<-ctx.Done()
 
-	log.Print("shutdown signal received")
-
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-
 	defer cancel()
 
-	if err := s.Shutdown(shutdownCtx); err != nil {
-		log.Printf("HTTP server shutdown error: %v", err)
-		return
+	log.Print("shutdown signal received")
+
+	shutdownDone := make(chan error, 1)
+	go func() {
+		err := s.Shutdown(shutdownCtx)
+		// Close не принимает контекст и может ждать возврата занятых соединений.
+		pool.Close()
+		shutdownDone <- err
+	}()
+
+	select {
+	case err := <-shutdownDone:
+		if err != nil {
+			log.Printf("HTTP server shutdown error: %v", err)
+			return
+		}
+		log.Print("HTTP server stopped")
+	case <-shutdownCtx.Done():
+		log.Printf("shutdown timeout exceeded, exiting: %v", shutdownCtx.Err())
 	}
-	log.Print("HTTP server stopped")
 }
