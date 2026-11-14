@@ -3,124 +3,109 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
-	api "github.com/deadOk-core/GoTemplate/internal/generated"
-	postgres "github.com/deadOk-core/GoTemplate/internal/postgres"
-	"github.com/go-chi/chi/v5"
-
-	"github.com/deadOk-core/GoTemplate/internal/httpapi"
-	"github.com/deadOk-core/GoTemplate/internal/trip"
+	"github.com/deadOk-core/GoTemplate/internal/config"
+	"github.com/deadOk-core/GoTemplate/internal/container"
 )
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	if err := run(context.Background()); err != nil {
+		logger := slog.New(
+			slog.NewJSONHandler(os.Stdout, nil),
+		)
+
+		logger.Error(
+			"application failed",
+			"service", "trip-service",
+			"trace_id", "",
+			"span_id", "",
+			"error", err,
+		)
+
+		os.Exit(1)
+	}
+}
+
+func run(rootCtx context.Context) error {
+	ctx, stop := signal.NotifyContext(
+		rootCtx,
+		os.Interrupt,
+		syscall.SIGTERM,
+	)
 	defer stop()
 
-	pool, err := postgres.NewPool(ctx)
+	cfg, err := config.Load()
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("load configuration: %w", err)
 	}
 
-	logLevel := os.Getenv("LOG_LEVEL")
-	if logLevel == "" {
-		log.Fatal("LOG_LEVEL is required")
-	}
-
-	queryTimeoutString := os.Getenv("DATABASE_QUERY_TIMEOUT")
-	if queryTimeoutString == "" {
-		log.Fatal("DATABASE_QUERY_TIMEOUT is required")
-	}
-
-	queryTimeout, err := time.ParseDuration(queryTimeoutString)
+	app, err := container.NewContainer(ctx, cfg)
 	if err != nil {
-		log.Fatalf("DATABASE_QUERY_TIMEOUT must be a duration: %v", err)
+		return fmt.Errorf("create application: %w", err)
 	}
 
-	shutdownTimeoutString := os.Getenv("SHUTDOWN_TIMEOUT")
-	if shutdownTimeoutString == "" {
-		log.Fatal("SHUTDOWN_TIMEOUT is required")
-	}
-
-	shutdownTimeout, err := time.ParseDuration(shutdownTimeoutString)
-	if err != nil {
-		log.Fatalf("SHUTDOWN_TIMEOUT must be a duration: %v", err)
-	}
-
-	// Репозиторий выполняет SQL-запросы к PostgreSQL.
-	repository := trip.NewRepository(pool, queryTimeout)
-
-	// Менеджер управляет транзакциями и передаёт их через context.
-	txManager := postgres.NewTransactionManager(pool)
-
-	// Сервис выполняет бизнес-операции с поездками.
-	service := trip.NewService(repository, txManager)
-
-	// Обработчик связывает HTTP с бизнес-сервисом.
-	handler := httpapi.NewHandler(service, pool, queryTimeout)
-
-	// Роутер принимает запросы и выбирает нужный обработчик.
-	router := chi.NewRouter()
-
-	// Регистрируем маршруты, сгенерированные из OpenAPI.
-	api.HandlerWithOptions(
-		handler,
-		api.ChiServerOptions{
-			BaseRouter:       router,
-			ErrorHandlerFunc: httpapi.HandleRequestError,
-		},
-	)
-
-	httpAddr := os.Getenv("HTTP_ADDR")
-	if httpAddr == "" {
-		log.Fatal("HTTP_ADDR is required")
-	}
-
-	s := http.Server{
-		Addr:              httpAddr,
-		Handler:           router,
-		ReadTimeout:       shutdownTimeout,
-		ReadHeaderTimeout: shutdownTimeout,
-		WriteTimeout:      shutdownTimeout,
-		IdleTimeout:       shutdownTimeout,
-	}
+	serverErrors := make(chan error, 1)
 
 	go func() {
-		log.Printf("HTTP server is listening on %s", httpAddr)
-
-		if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("HTTP server error: %v", err)
-		}
+		serverErrors <- app.Server.ListenAndServe()
 	}()
 
-	<-ctx.Done()
+	app.Logger.InfoContext(
+		ctx,
+		"HTTP server started",
+		"address", cfg.HTTPAddr,
+	)
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	var serveErr error
+
+	select {
+	case serveErr = <-serverErrors:
+		if errors.Is(serveErr, http.ErrServerClosed) {
+			serveErr = nil
+		}
+		if serveErr != nil {
+			serveErr = fmt.Errorf("HTTP server error: %w", serveErr)
+		}
+
+	case <-ctx.Done():
+		app.Logger.InfoContext(rootCtx, "shutdown signal received")
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(
+		rootCtx,
+		cfg.ShutdownTimeout,
+	)
 	defer cancel()
 
-	log.Print("shutdown signal received")
-
 	shutdownDone := make(chan error, 1)
+
 	go func() {
-		err := s.Shutdown(shutdownCtx)
-		// Close не принимает контекст и может ждать возврата занятых соединений.
-		pool.Close()
-		shutdownDone <- err
+		httpErr := app.Server.Shutdown(shutdownCtx)
+		closeErr := app.Close(shutdownCtx)
+		shutdownDone <- errors.Join(httpErr, closeErr)
 	}()
 
 	select {
 	case err := <-shutdownDone:
 		if err != nil {
-			log.Printf("HTTP server shutdown error: %v", err)
-			return
+			return errors.Join(serveErr, fmt.Errorf("application shutdown: %w", err))
 		}
-		log.Print("HTTP server stopped")
+
 	case <-shutdownCtx.Done():
-		log.Printf("shutdown timeout exceeded, exiting: %v", shutdownCtx.Err())
+		return errors.Join(serveErr, fmt.Errorf("application shutdown: %w", shutdownCtx.Err()))
 	}
+
+	if serveErr != nil {
+		return serveErr
+	}
+
+	app.Logger.InfoContext(rootCtx, "HTTP server stopped")
+
+	return nil
 }
