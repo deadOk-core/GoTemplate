@@ -34,6 +34,11 @@ type StatusHistory struct {
 	Reason     string
 }
 
+type StaleTrip struct {
+	ID       uuid.UUID
+	DriverID uuid.UUID
+}
+
 // domaintrip.Trip хранит состояние поездки и её поведение — например, правило Finish
 // model.Trip передаёт данные между слоями. У него нет бизнес-метода Finish
 

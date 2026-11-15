@@ -171,6 +171,45 @@ func TestRepositoryFinish(t *testing.T) {
 	assert.True(t, finished.FinishedAt.Equal(*found.FinishedAt))
 }
 
+func TestRepositoryListStaleTrips(t *testing.T) {
+	pool, repository := newTestRepository(t)
+	ctx := t.Context()
+	now := time.Now().UTC()
+	oldPosition := now.Add(-2 * time.Hour)
+	freshPosition := now.Add(-5 * time.Minute)
+	fixtureIDs := make(map[uuid.UUID]struct{})
+
+	createTrip := func(startedAt time.Time, lastPositionAt *time.Time) model.StaleTrip {
+		input := newTestTrip(t, pool)
+		input.StartedAt = startedAt
+		_, err := repository.Create(ctx, input)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, "UPDATE trips SET last_position_at = $1 WHERE id = $2", lastPositionAt, input.ID)
+		require.NoError(t, err)
+		fixtureIDs[input.ID] = struct{}{}
+		return model.StaleTrip{ID: input.ID, DriverID: input.DriverID}
+	}
+
+	stalePosition := createTrip(now.Add(-4*time.Hour), &oldPosition)
+	noPosition := createTrip(now.Add(-3*time.Hour), nil)
+	createTrip(now.Add(-4*time.Hour), &freshPosition)
+	createTrip(now.Add(-5*time.Minute), nil)
+	completed := createTrip(now.Add(-5*time.Hour), nil)
+	_, err := repository.Finish(ctx, completed.ID)
+	require.NoError(t, err)
+
+	trips, err := repository.ListStaleTrips(ctx, time.Hour)
+	require.NoError(t, err)
+
+	var found []model.StaleTrip
+	for _, trip := range trips {
+		if _, ok := fixtureIDs[trip.ID]; ok {
+			found = append(found, trip)
+		}
+	}
+	assert.Equal(t, []model.StaleTrip{noPosition, stalePosition}, found)
+}
+
 func TestRepositoryTransaction(t *testing.T) {
 	rollbackCause := errors.New("force transaction rollback")
 
