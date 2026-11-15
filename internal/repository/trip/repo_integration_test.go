@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,6 +19,8 @@ import (
 	"github.com/deadOk-core/GoTemplate/internal/infra/postgres/transaction"
 	"github.com/deadOk-core/GoTemplate/internal/model"
 	triprepository "github.com/deadOk-core/GoTemplate/internal/repository/trip"
+	"github.com/deadOk-core/GoTemplate/internal/usecase/trip/createposition"
+	"github.com/deadOk-core/GoTemplate/internal/usecase/trip/listpositions"
 )
 
 func newTestRepository(t *testing.T) (*pgxpool.Pool, *triprepository.Repository) {
@@ -208,6 +211,108 @@ func TestRepositoryListStaleTrips(t *testing.T) {
 		}
 	}
 	assert.Equal(t, []model.StaleTrip{noPosition, stalePosition}, found)
+}
+
+func TestRepositoryTripPositions(t *testing.T) {
+	pool, repository := newTestRepository(t)
+	ctx := t.Context()
+	manager := transaction.NewTransactionManager(pool)
+	creator := createposition.NewUseCase(repository, manager)
+	lister := listpositions.NewUseCase(repository)
+	input := newTestTrip(t, pool)
+	latest := time.Now().UTC().Truncate(time.Microsecond)
+	input.StartedAt = latest.Add(-time.Hour)
+	_, err := repository.Create(ctx, input)
+	require.NoError(t, err)
+	positions, err := lister.List(ctx, input.ID)
+	require.NoError(t, err)
+	assert.Empty(t, positions)
+
+	recent := domaintrip.PositionParams{Latitude: 59.93, Longitude: 30.33, RecordedAt: latest}
+	old := domaintrip.PositionParams{Latitude: 59.94, Longitude: 30.32, RecordedAt: latest.Add(-time.Minute)}
+	first, err := creator.Create(ctx, input.ID, recent)
+	require.NoError(t, err)
+	second, err := creator.Create(ctx, input.ID, old)
+	require.NoError(t, err)
+	third, err := creator.Create(ctx, input.ID, old)
+	require.NoError(t, err)
+	assert.Less(t, second.ID, third.ID)
+
+	err = manager.Do(ctx, func(txCtx context.Context) error {
+		invalid := model.TripPosition{TripID: input.ID, PositionParams: domaintrip.PositionParams{
+			Latitude:   91,
+			RecordedAt: latest.Add(time.Second),
+		}}
+		if err := repository.UpdateLastPosition(txCtx, input.ID, invalid.RecordedAt); err != nil {
+			return err
+		}
+		_, err := repository.InsertPosition(txCtx, invalid)
+		return err
+	})
+	var pgErr *pgconn.PgError
+	require.ErrorAs(t, err, &pgErr)
+	assert.Equal(t, "23514", pgErr.Code)
+
+	trip, err := repository.GetByID(ctx, input.ID)
+	require.NoError(t, err)
+	require.NotNil(t, trip.LastPositionAt)
+	assert.True(t, latest.Equal(*trip.LastPositionAt))
+	finished, err := repository.Finish(ctx, input.ID)
+	require.NoError(t, err)
+	require.NotNil(t, finished.LastPositionAt)
+	assert.True(t, latest.Equal(*finished.LastPositionAt))
+	_, err = creator.Create(ctx, input.ID, recent)
+	require.ErrorIs(t, err, domaintrip.ErrTripCompleted)
+
+	positions, err = lister.List(ctx, input.ID)
+	require.NoError(t, err)
+	assert.Equal(t, []model.TripPosition{second, third, first}, positions)
+}
+
+func TestRepositoryPositionDuringFinish(t *testing.T) {
+	pool, repository := newTestRepository(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	manager := transaction.NewTransactionManager(pool)
+	creator := createposition.NewUseCase(repository, manager)
+	input := newTestTrip(t, pool)
+	_, err := repository.Create(ctx, input)
+	require.NoError(t, err)
+
+	saving := make(chan struct{})
+	saved := make(chan error, 1)
+	err = manager.Do(ctx, func(finishCtx context.Context) error {
+		if _, err := repository.Finish(finishCtx, input.ID); err != nil {
+			return err
+		}
+		go func() {
+			saved <- manager.Do(ctx, func(saveCtx context.Context) error {
+				close(saving)
+				_, err := creator.Create(saveCtx, input.ID, domaintrip.PositionParams{RecordedAt: time.Now()})
+				return err
+			})
+		}()
+		select {
+		case <-saving:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	})
+	require.NoError(t, err)
+	select {
+	case err := <-saved:
+		require.ErrorIs(t, err, domaintrip.ErrTripCompleted)
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+
+	trip, err := repository.GetByID(t.Context(), input.ID)
+	require.NoError(t, err)
+	assert.Nil(t, trip.LastPositionAt)
+	positions, err := repository.ListPositions(t.Context(), input.ID)
+	require.NoError(t, err)
+	assert.Empty(t, positions)
 }
 
 func TestRepositoryTransaction(t *testing.T) {

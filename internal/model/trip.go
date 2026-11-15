@@ -21,10 +21,11 @@ type Trip struct {
 	Price  int64
 	Status domaintrip.Status
 
-	StartedAt  time.Time
-	FinishedAt *time.Time
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	StartedAt      time.Time
+	FinishedAt     *time.Time
+	LastPositionAt *time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type StatusHistory struct {
@@ -37,6 +38,12 @@ type StatusHistory struct {
 type StaleTrip struct {
 	ID       uuid.UUID
 	DriverID uuid.UUID
+}
+
+type TripPosition struct {
+	ID     int64
+	TripID uuid.UUID
+	domaintrip.PositionParams
 }
 
 // domaintrip.Trip хранит состояние поездки и её поведение — например, правило Finish

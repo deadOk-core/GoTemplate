@@ -17,15 +17,19 @@ import (
 	httpapi "github.com/deadOk-core/GoTemplate/internal/http"
 	httpmiddleware "github.com/deadOk-core/GoTemplate/internal/http/middleware"
 	createhandler "github.com/deadOk-core/GoTemplate/internal/http/trip/create"
+	createpositionhandler "github.com/deadOk-core/GoTemplate/internal/http/trip/createposition"
 	finishhandler "github.com/deadOk-core/GoTemplate/internal/http/trip/finish"
 	gethandler "github.com/deadOk-core/GoTemplate/internal/http/trip/get"
+	listpositionshandler "github.com/deadOk-core/GoTemplate/internal/http/trip/listpositions"
 	"github.com/deadOk-core/GoTemplate/internal/infra/postgres"
 	"github.com/deadOk-core/GoTemplate/internal/infra/postgres/transaction"
 	"github.com/deadOk-core/GoTemplate/internal/infra/telemetry"
 	triprepository "github.com/deadOk-core/GoTemplate/internal/repository/trip"
 	createusecase "github.com/deadOk-core/GoTemplate/internal/usecase/trip/create"
+	createpositionusecase "github.com/deadOk-core/GoTemplate/internal/usecase/trip/createposition"
 	finishusecase "github.com/deadOk-core/GoTemplate/internal/usecase/trip/finish"
 	getusecase "github.com/deadOk-core/GoTemplate/internal/usecase/trip/get"
+	listpositionsusecase "github.com/deadOk-core/GoTemplate/internal/usecase/trip/listpositions"
 )
 
 type Container struct {
@@ -85,15 +89,21 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 	createUseCase := createusecase.NewUseCase(repository, txManager, logger, created)
 	getUseCase := getusecase.NewUseCase(repository)
 	finishUseCase := finishusecase.NewUseCase(repository, txManager, logger, completed)
+	createPositionUseCase := createpositionusecase.NewUseCase(repository, txManager)
+	listPositionsUseCase := listpositionsusecase.NewUseCase(repository)
 
 	createHandler := createhandler.NewHandler(createUseCase, logger)
 	getHandler := gethandler.NewHandler(getUseCase, logger)
 	finishHandler := finishhandler.NewHandler(finishUseCase, logger)
+	createPositionHandler := createpositionhandler.NewHandler(createPositionUseCase)
+	listPositionsHandler := listpositionshandler.NewHandler(listPositionsUseCase)
 
 	handler := httpapi.NewHandler(
 		createHandler,
 		getHandler,
 		finishHandler,
+		createPositionHandler,
+		listPositionsHandler,
 		pool,
 		cfg.Database.QueryTimeout,
 		logger,

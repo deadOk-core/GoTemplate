@@ -9,29 +9,35 @@ import (
 )
 
 type Handler struct {
-	creator      tripCreator
-	getter       tripGetter
-	finisher     tripFinisher
-	pinger       databasePinger
-	queryTimeout time.Duration
-	logger       *slog.Logger
+	creator         tripCreator
+	getter          tripGetter
+	finisher        tripFinisher
+	positionCreator tripPositionCreator
+	positionLister  tripPositionLister
+	pinger          databasePinger
+	queryTimeout    time.Duration
+	logger          *slog.Logger
 }
 
 func NewHandler(
 	creator tripCreator,
 	getter tripGetter,
 	finisher tripFinisher,
+	positionCreator tripPositionCreator,
+	positionLister tripPositionLister,
 	pinger databasePinger,
 	queryTimeout time.Duration,
 	logger *slog.Logger,
 ) *Handler {
 	return &Handler{
-		creator:      creator,
-		getter:       getter,
-		finisher:     finisher,
-		pinger:       pinger,
-		queryTimeout: queryTimeout,
-		logger:       logger,
+		creator:         creator,
+		getter:          getter,
+		finisher:        finisher,
+		positionCreator: positionCreator,
+		positionLister:  positionLister,
+		pinger:          pinger,
+		queryTimeout:    queryTimeout,
+		logger:          logger,
 	}
 }
 

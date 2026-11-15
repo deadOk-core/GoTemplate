@@ -41,7 +41,7 @@ func TestHandlerReady(t *testing.T) {
 			pinger := NewMockdatabasePinger(ctrl)
 
 			// Ready не использует сервис поездок, поэтому передаём nil.
-			handler := httpapi.NewHandler(nil, nil, nil, pinger, 5*time.Second, slog.New(slog.DiscardHandler))
+			handler := httpapi.NewHandler(nil, nil, nil, nil, nil, pinger, 5*time.Second, slog.New(slog.DiscardHandler))
 
 			request := httptest.NewRequest(http.MethodGet, "/ready", nil).
 				WithContext(t.Context())

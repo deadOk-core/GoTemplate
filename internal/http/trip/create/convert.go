@@ -22,10 +22,11 @@ func toAPITrip(input model.Trip) api.Trip {
 			Latitude:  input.EndLatitude,
 			Longitude: input.EndLongitude,
 		},
-		Price:      input.Price,
-		Status:     api.TripStatus(input.Status),
-		StartedAt:  input.StartedAt,
-		FinishedAt: input.FinishedAt,
+		Price:          input.Price,
+		Status:         api.TripStatus(input.Status),
+		StartedAt:      input.StartedAt,
+		FinishedAt:     input.FinishedAt,
+		LastPositionAt: input.LastPositionAt,
 	}
 }
 
