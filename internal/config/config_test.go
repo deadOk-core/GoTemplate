@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"log/slog"
+	"net/url"
 	"testing"
 	"time"
 
@@ -19,6 +20,12 @@ const (
 	otelProtocolEnv           = "OTEL_EXPORTER_OTLP_PROTOCOL"
 	otelResourceAttributesEnv = "OTEL_RESOURCE_ATTRIBUTES"
 	otelSamplerEnv            = "OTEL_TRACES_SAMPLER"
+	pushHTTPURLEnv            = "PUSH_HTTP_URL"
+	pushTimeoutEnv            = "PUSH_REQUEST_TIMEOUT"
+	positionCheckIntervalEnv  = "POSITION_CHECK_INTERVAL"
+	positionStaleAfterEnv     = "POSITION_STALE_AFTER"
+	positionWorkersEnv        = "POSITION_WORKERS"
+	positionQueueSizeEnv      = "POSITION_QUEUE_SIZE"
 )
 
 func setValidEnv(t *testing.T) {
@@ -39,6 +46,12 @@ func setValidEnv(t *testing.T) {
 		otelProtocolEnv:              "http/protobuf",
 		otelResourceAttributesEnv:    "service.namespace=tripgo,deployment.environment=local",
 		otelSamplerEnv:               "parentbased_always_on",
+		pushHTTPURLEnv:               "http://localhost:8090",
+		pushTimeoutEnv:               "",
+		positionCheckIntervalEnv:     "",
+		positionStaleAfterEnv:        "",
+		positionWorkersEnv:           "",
+		positionQueueSizeEnv:         "",
 	}
 
 	for name, value := range values {
@@ -65,6 +78,16 @@ func TestLoad(t *testing.T) {
 			MaxConnLifetime: 30 * time.Minute,
 			ConnectTimeout:  5 * time.Second,
 			QueryTimeout:    3 * time.Second,
+		},
+		Positions: config.PositionsConfig{
+			CheckInterval: 30 * time.Second,
+			StaleAfter:    time.Minute,
+			Workers:       4,
+			QueueSize:     100,
+		},
+		Push: config.PushConfig{
+			HTTPURL:        &url.URL{Scheme: "http", Host: "localhost:8090"},
+			RequestTimeout: time.Second,
 		},
 		ServiceName:  "trip-service",
 		OTLPEndpoint: "http://localhost:4318",

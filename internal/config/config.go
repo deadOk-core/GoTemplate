@@ -15,6 +15,8 @@ type Config struct {
 	LogLevel        slog.Level
 	ShutdownTimeout time.Duration
 	Database        DatabaseConfig
+	Positions       PositionsConfig
+	Push            PushConfig
 	OTLPEndpoint    string
 	OTLPProtocol    string
 }
@@ -143,6 +145,15 @@ func Load() (Config, error) {
 		)
 	}
 
+	cfg.Positions, err = loadPositionsConfig()
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.Push, err = loadPushConfig()
+	if err != nil {
+		return Config{}, err
+	}
+
 	return cfg, nil
 }
 
@@ -160,6 +171,10 @@ func requiredDuration(name string) (time.Duration, error) {
 		return 0, err
 	}
 
+	return positiveDuration(name, value)
+}
+
+func positiveDuration(name, value string) (time.Duration, error) {
 	duration, err := time.ParseDuration(value)
 	if err != nil {
 		return 0, fmt.Errorf("ENV %s must be a duration: %w", name, err)
