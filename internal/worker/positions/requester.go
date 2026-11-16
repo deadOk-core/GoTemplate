@@ -31,5 +31,9 @@ func (r *Requester) Request(ctx context.Context, trip model.StaleTrip) {
 		result = "error"
 		r.logger.WarnContext(ctx, "request trip position failed", "trip_id", trip.ID.String(), "error", err)
 	}
+	r.recordResult(ctx, result)
+}
+
+func (r *Requester) recordResult(ctx context.Context, result string) {
 	r.requests.Add(ctx, 1, metric.WithAttributes(attribute.String("result", result)))
 }

@@ -54,5 +54,5 @@ func TestRequesterRecordsResultsAndLogsFailure(t *testing.T) {
 		require.True(t, ok)
 		results[result.AsString()] = point.Value
 	}
-	assert.Equal(t, map[string]int64{"success": 1, "error": 1}, results)
+	assert.Equal(t, map[string]int64{resultSuccess: 1, "error": 1}, results)
 }
