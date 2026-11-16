@@ -38,7 +38,8 @@ func TestCreatePositionTransaction(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			repo := NewMocktripRepository(ctrl)
 			manager := NewMocktxManager(ctrl)
-			useCase := createposition.NewUseCase(repo, manager)
+			canceller := NewMockpositionRequestCanceller(ctrl)
+			useCase := createposition.NewUseCase(repo, manager, canceller)
 			ctx := t.Context()
 			txCtx, cancel := context.WithCancel(ctx)
 			defer cancel()
@@ -46,15 +47,21 @@ func TestCreatePositionTransaction(t *testing.T) {
 			input := model.TripPosition{TripID: uuid.New(), PositionParams: domaintrip.PositionParams{RecordedAt: time.Now()}}
 			stored := input
 			stored.ID = 42
+			committed := false
 			manager.EXPECT().Do(ctx, gomock.Any()).DoAndReturn(func(_ context.Context, fn func(context.Context) error) error {
 				if err := fn(txCtx); err != nil {
 					return err
 				}
+				committed = tt.commitErr == nil
 				return tt.commitErr
 			})
 			update := repo.EXPECT().UpdateLastPosition(txCtx, input.TripID, input.RecordedAt).Return(tt.updateErr)
 			if tt.updateErr == nil {
 				repo.EXPECT().InsertPosition(txCtx, input).Return(stored, tt.insertErr).After(update)
+			}
+			if tt.wantErr == nil {
+				canceller.EXPECT().Cancel(ctx, input.TripID).
+					Do(func(context.Context, uuid.UUID) { assert.True(t, committed) })
 			}
 
 			got, err := useCase.Create(ctx, input.TripID, input.PositionParams)
@@ -71,7 +78,7 @@ func TestCreatePositionTransaction(t *testing.T) {
 
 func TestCreatePositionRejectsInvalidInputBeforeTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	useCase := createposition.NewUseCase(NewMocktripRepository(ctrl), NewMocktxManager(ctrl))
+	useCase := createposition.NewUseCase(NewMocktripRepository(ctrl), NewMocktxManager(ctrl), NewMockpositionRequestCanceller(ctrl))
 	params := domaintrip.PositionParams{RecordedAt: time.Now().Add(2 * time.Minute)}
 	_, err := useCase.Create(t.Context(), uuid.New(), params)
 	var validationErr *domaintrip.ValidationError

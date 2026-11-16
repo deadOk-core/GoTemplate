@@ -34,7 +34,9 @@ type poolFixture struct {
 	reader   *sdkmetric.ManualReader
 	logs     *bytes.Buffer
 	ctx      context.Context
+	cancel   context.CancelFunc
 	stopScan context.CancelFunc
+	scanDone <-chan struct{}
 	ticks    chan time.Time
 	done     chan struct{}
 }
@@ -65,7 +67,8 @@ func newPoolFixture(t *testing.T, workers, capacity int, requestTimeout time.Dur
 	ticks := make(chan time.Time)
 	clock := NewMockticker(ctrl)
 	clock.EXPECT().Ticks().Return((<-chan time.Time)(ticks))
-	clock.EXPECT().Stop()
+	scanDone := make(chan struct{})
+	clock.EXPECT().Stop().Do(func() { close(scanDone) })
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -87,7 +90,9 @@ func newPoolFixture(t *testing.T, workers, capacity int, requestTimeout time.Dur
 		reader:   reader,
 		logs:     logs,
 		ctx:      ctx,
+		cancel:   cancel,
 		stopScan: stopScan,
+		scanDone: scanDone,
 		ticks:    ticks,
 		done:     done,
 	}
@@ -258,8 +263,10 @@ func TestPoolProcessesAllTripsWithConfiguredWorkerCount(t *testing.T) {
 	assert.NotEqual(t, first, second)
 	assert.EqualValues(t, workers, active.Load())
 	f.scan(t)
+	f.stopScan()
+	waitValue(t, f.ctx, f.scanDone)
 	close(release)
-	f.stop(t)
+	waitValue(t, f.ctx, f.done)
 	assert.Equal(t, map[string]int64{resultSuccess: int64(len(trips))}, f.results(t, "tripgo.position_requests"))
 }
 
@@ -308,4 +315,39 @@ func TestPoolDoesNotOverlapScans(t *testing.T) {
 	close(release)
 	f.scan(t)
 	f.stop(t)
+}
+
+func TestPoolCancelsScanAndActiveWorker(t *testing.T) {
+	f := newPoolFixture(t, 1, 2, time.Minute)
+	active, queued := newTrip(), newTrip()
+	requestStarted := make(chan struct{})
+	requestStopped := make(chan error, 1)
+	f.gateway.EXPECT().RequestPosition(gomock.Any(), active.DriverID, active.ID).
+		DoAndReturn(func(ctx context.Context, _, _ uuid.UUID) error {
+			close(requestStarted)
+			<-ctx.Done()
+			requestStopped <- ctx.Err()
+			return ctx.Err()
+		})
+	f.scan(t, active, queued)
+	waitValue(t, f.ctx, requestStarted)
+	queryStarted := make(chan struct{})
+	queryStopped := make(chan error, 1)
+	f.repo.EXPECT().ListStaleTrips(gomock.Any(), staleAfter).
+		DoAndReturn(func(ctx context.Context, _ time.Duration) ([]model.StaleTrip, error) {
+			close(queryStarted)
+			<-ctx.Done()
+			queryStopped <- ctx.Err()
+			return nil, ctx.Err()
+		})
+	f.sendTick(t)
+	waitValue(t, f.ctx, queryStarted)
+	f.cancel()
+
+	waitCtx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	assert.ErrorIs(t, waitValue(t, waitCtx, queryStopped), context.Canceled)
+	assert.ErrorIs(t, waitValue(t, waitCtx, requestStopped), context.Canceled)
+	waitValue(t, waitCtx, f.scanDone)
+	waitValue(t, waitCtx, f.done)
 }

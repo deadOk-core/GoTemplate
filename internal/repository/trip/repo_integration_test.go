@@ -213,11 +213,15 @@ func TestRepositoryListStaleTrips(t *testing.T) {
 	assert.Equal(t, []model.StaleTrip{noPosition, stalePosition}, found)
 }
 
+type noopPositionRequestCanceller struct{}
+
+func (noopPositionRequestCanceller) Cancel(context.Context, uuid.UUID) {}
+
 func TestRepositoryTripPositions(t *testing.T) {
 	pool, repository := newTestRepository(t)
 	ctx := t.Context()
 	manager := transaction.NewTransactionManager(pool)
-	creator := createposition.NewUseCase(repository, manager)
+	creator := createposition.NewUseCase(repository, manager, noopPositionRequestCanceller{})
 	lister := listpositions.NewUseCase(repository)
 	input := newTestTrip(t, pool)
 	latest := time.Now().UTC().Truncate(time.Microsecond)
@@ -274,7 +278,7 @@ func TestRepositoryPositionDuringFinish(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	manager := transaction.NewTransactionManager(pool)
-	creator := createposition.NewUseCase(repository, manager)
+	creator := createposition.NewUseCase(repository, manager, noopPositionRequestCanceller{})
 	input := newTestTrip(t, pool)
 	_, err := repository.Create(ctx, input)
 	require.NoError(t, err)

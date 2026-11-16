@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/deadOk-core/GoTemplate/internal/config"
+	"github.com/deadOk-core/GoTemplate/internal/gateway/push"
 	api "github.com/deadOk-core/GoTemplate/internal/generated"
 	httpapi "github.com/deadOk-core/GoTemplate/internal/http"
 	httpmiddleware "github.com/deadOk-core/GoTemplate/internal/http/middleware"
@@ -30,6 +31,7 @@ import (
 	finishusecase "github.com/deadOk-core/GoTemplate/internal/usecase/trip/finish"
 	getusecase "github.com/deadOk-core/GoTemplate/internal/usecase/trip/get"
 	listpositionsusecase "github.com/deadOk-core/GoTemplate/internal/usecase/trip/listpositions"
+	"github.com/deadOk-core/GoTemplate/internal/worker/positions"
 )
 
 type Container struct {
@@ -37,6 +39,10 @@ type Container struct {
 	pool              *pgxpool.Pool
 	Logger            *slog.Logger
 	shutdownTelemetry func(context.Context) error
+	pushGateway       *push.Gateway
+	stopScanner       context.CancelFunc
+	stopWorkers       context.CancelFunc
+	positionsDone     <-chan struct{}
 }
 
 func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
@@ -84,12 +90,23 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		return nil, err
 	}
 
+	pushGateway := push.NewGateway(cfg.Push.HTTPURL, cfg.Push.RequestTimeout)
+	positionsMeter := otel.Meter("trip-service/positions")
+	requester, err := positions.NewRequester(pushGateway, logger, positionsMeter)
+	if err != nil {
+		return nil, err
+	}
+	positionPool, err := positions.NewPool(repository, requester, logger, positionsMeter, cfg.Positions, cfg.Push.RequestTimeout)
+	if err != nil {
+		return nil, err
+	}
+
 	txManager := transaction.NewTransactionManager(pool)
 
 	createUseCase := createusecase.NewUseCase(repository, txManager, logger, created)
 	getUseCase := getusecase.NewUseCase(repository)
 	finishUseCase := finishusecase.NewUseCase(repository, txManager, logger, completed)
-	createPositionUseCase := createpositionusecase.NewUseCase(repository, txManager)
+	createPositionUseCase := createpositionusecase.NewUseCase(repository, txManager, positionPool)
 	listPositionsUseCase := listpositionsusecase.NewUseCase(repository)
 
 	createHandler := createhandler.NewHandler(createUseCase, logger)
@@ -133,20 +150,43 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelError),
 	}
 
+	pollingCtx := context.WithoutCancel(ctx)
+	scanCtx, stopScanner := context.WithCancel(pollingCtx)
+	workerCtx, stopWorkers := context.WithCancel(pollingCtx)
+	positionsDone := make(chan struct{})
+	go func() {
+		defer close(positionsDone)
+		positionPool.Run(scanCtx, workerCtx)
+	}()
+
 	initialized = true
 	return &Container{
 		Server:            server,
 		pool:              pool,
 		Logger:            logger,
 		shutdownTelemetry: shutdownTelemetry,
+		pushGateway:       pushGateway,
+		stopScanner:       stopScanner,
+		stopWorkers:       stopWorkers,
+		positionsDone:     positionsDone,
 	}, nil
 }
 
 func (c *Container) Close(ctx context.Context) error {
+	c.stopScanner()
+	defer c.stopWorkers()
+	select {
+	case <-c.positionsDone:
+	case <-ctx.Done():
+		c.stopWorkers()
+		<-c.positionsDone
+	}
+	c.pushGateway.CloseIdleConnections()
+
 	// The final metric collection still needs the pool for the active trips gauge.
 	defer c.pool.Close()
 	if err := c.shutdownTelemetry(ctx); err != nil {
 		return fmt.Errorf("shutdown telemetry: %w", err)
 	}
-	return nil
+	return ctx.Err()
 }

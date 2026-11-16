@@ -109,3 +109,39 @@ func (mr *MocktxManagerMockRecorder) Do(ctx, fn any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Do", reflect.TypeOf((*MocktxManager)(nil).Do), ctx, fn)
 }
+
+// MockpositionRequestCanceller is a mock of positionRequestCanceller interface.
+type MockpositionRequestCanceller struct {
+	ctrl     *gomock.Controller
+	recorder *MockpositionRequestCancellerMockRecorder
+	isgomock struct{}
+}
+
+// MockpositionRequestCancellerMockRecorder is the mock recorder for MockpositionRequestCanceller.
+type MockpositionRequestCancellerMockRecorder struct {
+	mock *MockpositionRequestCanceller
+}
+
+// NewMockpositionRequestCanceller creates a new mock instance.
+func NewMockpositionRequestCanceller(ctrl *gomock.Controller) *MockpositionRequestCanceller {
+	mock := &MockpositionRequestCanceller{ctrl: ctrl}
+	mock.recorder = &MockpositionRequestCancellerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockpositionRequestCanceller) EXPECT() *MockpositionRequestCancellerMockRecorder {
+	return m.recorder
+}
+
+// Cancel mocks base method.
+func (m *MockpositionRequestCanceller) Cancel(ctx context.Context, tripID uuid.UUID) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Cancel", ctx, tripID)
+}
+
+// Cancel indicates an expected call of Cancel.
+func (mr *MockpositionRequestCancellerMockRecorder) Cancel(ctx, tripID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cancel", reflect.TypeOf((*MockpositionRequestCanceller)(nil).Cancel), ctx, tripID)
+}
