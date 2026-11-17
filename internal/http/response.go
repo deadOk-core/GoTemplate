@@ -35,19 +35,21 @@ func (h *Handler) writeProblem(
 	detail string,
 	code string,
 ) {
-	instance := r.URL.Path
-
 	problem := api.Problem{
-		Code:     code,
-		Detail:   &detail,
-		Instance: &instance,
-		Status:   status,
-		Title:    title,
-		Type:     problemType,
+		Code:   code,
+		Detail: &detail,
+		Status: status,
+		Title:  title,
+		Type:   problemType,
 	}
+	h.writeProblemBody(w, r, problem)
+}
 
+func (h *Handler) writeProblemBody(w http.ResponseWriter, r *http.Request, problem api.Problem) {
+	instance := r.URL.Path
+	problem.Instance = &instance
 	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(int(status))
+	w.WriteHeader(int(problem.Status))
 
 	if err := json.NewEncoder(w).Encode(problem); err != nil {
 		h.logger.ErrorContext(

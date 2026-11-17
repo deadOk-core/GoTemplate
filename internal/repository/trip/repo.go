@@ -17,6 +17,8 @@ import (
 	"github.com/deadOk-core/GoTemplate/internal/model"
 )
 
+const tripStatusColumn = "status"
+
 type Repository struct {
 	pool         *pgxpool.Pool
 	queryTimeout time.Duration
@@ -47,6 +49,7 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (model.Trip, err
 		"status",
 		"started_at",
 		"finished_at",
+		"last_position_at",
 		"created_at",
 		"updated_at",
 	).From("trips").Where(sq.Eq{"id": id}).PlaceholderFormat(sq.Dollar).ToSql()
@@ -68,6 +71,7 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (model.Trip, err
 		&res.Status,
 		&res.StartedAt,
 		&res.FinishedAt,
+		&res.LastPositionAt,
 		&res.CreatedAt,
 		&res.UpdatedAt,
 	)
@@ -171,7 +175,7 @@ func (r *Repository) Finish(ctx context.Context, id uuid.UUID) (model.Trip, erro
 
 	query, args, err := sq.Update("trips").
 		Set("status", domaintrip.StatusCompleted).Set("finished_at", sq.Expr("now()")).Set("updated_at", sq.Expr("now()")).
-		Where(sq.Eq{"id": id, "status": domaintrip.StatusActive}).
+		Where(sq.Eq{"id": id, tripStatusColumn: domaintrip.StatusActive}).
 		Suffix(`
 		RETURNING
 			id,
@@ -185,6 +189,7 @@ func (r *Repository) Finish(ctx context.Context, id uuid.UUID) (model.Trip, erro
 			status,
 			started_at,
 			finished_at,
+			last_position_at,
 			created_at,
 			updated_at
 		`).PlaceholderFormat(sq.Dollar).ToSql()
@@ -206,6 +211,7 @@ func (r *Repository) Finish(ctx context.Context, id uuid.UUID) (model.Trip, erro
 		&finishedTrip.Status,
 		&finishedTrip.StartedAt,
 		&finishedTrip.FinishedAt,
+		&finishedTrip.LastPositionAt,
 		&finishedTrip.CreatedAt,
 		&finishedTrip.UpdatedAt,
 	)

@@ -11,6 +11,7 @@ package http_test
 
 import (
 	context "context"
+	io "io"
 	http "net/http"
 	reflect "reflect"
 
@@ -124,6 +125,84 @@ func (m *MocktripFinisher) FinishTrip(w http.ResponseWriter, r *http.Request, tr
 func (mr *MocktripFinisherMockRecorder) FinishTrip(w, r, tripID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinishTrip", reflect.TypeOf((*MocktripFinisher)(nil).FinishTrip), w, r, tripID)
+}
+
+// MocktripPositionCreator is a mock of tripPositionCreator interface.
+type MocktripPositionCreator struct {
+	ctrl     *gomock.Controller
+	recorder *MocktripPositionCreatorMockRecorder
+	isgomock struct{}
+}
+
+// MocktripPositionCreatorMockRecorder is the mock recorder for MocktripPositionCreator.
+type MocktripPositionCreatorMockRecorder struct {
+	mock *MocktripPositionCreator
+}
+
+// NewMocktripPositionCreator creates a new mock instance.
+func NewMocktripPositionCreator(ctrl *gomock.Controller) *MocktripPositionCreator {
+	mock := &MocktripPositionCreator{ctrl: ctrl}
+	mock.recorder = &MocktripPositionCreatorMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocktripPositionCreator) EXPECT() *MocktripPositionCreatorMockRecorder {
+	return m.recorder
+}
+
+// Create mocks base method.
+func (m *MocktripPositionCreator) Create(ctx context.Context, tripID api.TripId, body io.Reader) (api.TripPosition, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Create", ctx, tripID, body)
+	ret0, _ := ret[0].(api.TripPosition)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Create indicates an expected call of Create.
+func (mr *MocktripPositionCreatorMockRecorder) Create(ctx, tripID, body any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MocktripPositionCreator)(nil).Create), ctx, tripID, body)
+}
+
+// MocktripPositionLister is a mock of tripPositionLister interface.
+type MocktripPositionLister struct {
+	ctrl     *gomock.Controller
+	recorder *MocktripPositionListerMockRecorder
+	isgomock struct{}
+}
+
+// MocktripPositionListerMockRecorder is the mock recorder for MocktripPositionLister.
+type MocktripPositionListerMockRecorder struct {
+	mock *MocktripPositionLister
+}
+
+// NewMocktripPositionLister creates a new mock instance.
+func NewMocktripPositionLister(ctrl *gomock.Controller) *MocktripPositionLister {
+	mock := &MocktripPositionLister{ctrl: ctrl}
+	mock.recorder = &MocktripPositionListerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocktripPositionLister) EXPECT() *MocktripPositionListerMockRecorder {
+	return m.recorder
+}
+
+// List mocks base method.
+func (m *MocktripPositionLister) List(ctx context.Context, tripID api.TripId) (api.TripPositionsResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "List", ctx, tripID)
+	ret0, _ := ret[0].(api.TripPositionsResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// List indicates an expected call of List.
+func (mr *MocktripPositionListerMockRecorder) List(ctx, tripID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MocktripPositionLister)(nil).List), ctx, tripID)
 }
 
 // MockdatabasePinger is a mock of databasePinger interface.

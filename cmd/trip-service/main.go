@@ -78,7 +78,7 @@ func run(rootCtx context.Context) error {
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(
-		rootCtx,
+		context.WithoutCancel(rootCtx),
 		cfg.ShutdownTimeout,
 	)
 	defer cancel()
@@ -87,6 +87,9 @@ func run(rootCtx context.Context) error {
 
 	go func() {
 		httpErr := app.Server.Shutdown(shutdownCtx)
+		if httpErr != nil {
+			httpErr = errors.Join(httpErr, app.Server.Close())
+		}
 		closeErr := app.Close(shutdownCtx)
 		shutdownDone <- errors.Join(httpErr, closeErr)
 	}()
