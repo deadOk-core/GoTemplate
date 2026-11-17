@@ -15,10 +15,11 @@ type UseCase struct {
 	repository tripRepository
 	txManager  txManager
 	canceller  positionRequestCanceller
+	saved      positionCounter
 }
 
-func NewUseCase(repository tripRepository, txManager txManager, canceller positionRequestCanceller) *UseCase {
-	return &UseCase{repository: repository, txManager: txManager, canceller: canceller}
+func NewUseCase(repository tripRepository, txManager txManager, canceller positionRequestCanceller, saved positionCounter) *UseCase {
+	return &UseCase{repository: repository, txManager: txManager, canceller: canceller, saved: saved}
 }
 
 func (u *UseCase) Create(ctx context.Context, tripID uuid.UUID, params domaintrip.PositionParams) (model.TripPosition, error) {
@@ -39,5 +40,6 @@ func (u *UseCase) Create(ctx context.Context, tripID uuid.UUID, params domaintri
 		return model.TripPosition{}, fmt.Errorf("save trip position: %w", err)
 	}
 	u.canceller.Cancel(ctx, tripID)
+	u.saved.Add(ctx, 1)
 	return saved, nil
 }

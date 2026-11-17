@@ -40,19 +40,21 @@ func TestRequesterRecordsResultsAndLogsFailure(t *testing.T) {
 	assert.Contains(t, logs.String(), "unavailable")
 	assert.NotContains(t, logs.String(), trip.DriverID.String())
 
-	var metrics metricdata.ResourceMetrics
-	require.NoError(t, reader.Collect(t.Context(), &metrics))
-	require.Len(t, metrics.ScopeMetrics, 1)
-	require.Len(t, metrics.ScopeMetrics[0].Metrics, 1)
-	requests := metrics.ScopeMetrics[0].Metrics[0]
-	require.Equal(t, "tripgo.position_requests", requests.Name)
-	sum, ok := requests.Data.(metricdata.Sum[int64])
+	requests := collectMetric(t, reader, positionRequestsMetric)
+	require.Equal(t, positionRequestsMetric, requests.Name)
+	want := map[string]int64{resultSuccess: 1, resultError: 1}
+	assert.Equal(t, want, counterResults(t, requests))
+
+	duration := collectMetric(t, reader, "tripgo.position_requests.duration")
+	assert.Equal(t, "s", duration.Unit)
+	histogram, ok := duration.Data.(metricdata.Histogram[float64])
 	require.True(t, ok)
-	results := make(map[string]int64, len(sum.DataPoints))
-	for _, point := range sum.DataPoints {
+	results := make(map[string]uint64, len(histogram.DataPoints))
+	for _, point := range histogram.DataPoints {
 		result, ok := point.Attributes.Value(attribute.Key("result"))
 		require.True(t, ok)
-		results[result.AsString()] = point.Value
+		assert.GreaterOrEqual(t, point.Sum, 0.0)
+		results[result.AsString()] = point.Count
 	}
-	assert.Equal(t, map[string]int64{resultSuccess: 1, "error": 1}, results)
+	assert.Equal(t, map[string]uint64{resultSuccess: 1, resultError: 1}, results)
 }

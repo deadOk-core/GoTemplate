@@ -3,6 +3,7 @@ package positions_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"sync/atomic"
@@ -13,18 +14,27 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/mock/gomock"
 
 	"github.com/deadOk-core/GoTemplate/internal/config"
+	"github.com/deadOk-core/GoTemplate/internal/infra/telemetry"
 	"github.com/deadOk-core/GoTemplate/internal/model"
 	"github.com/deadOk-core/GoTemplate/internal/worker/positions"
 )
 
 const (
-	staleAfter    = time.Minute
-	resultSuccess = "success"
+	staleAfter             = time.Minute
+	resultSuccess          = "success"
+	resultError            = "error"
+	positionRequestsMetric = "tripgo.position_requests"
+	queueSizeMetric        = "tripgo.position_requests.queue.size"
+	activeWorkersMetric    = "tripgo.position_requests.workers.active"
 )
 
 type poolFixture struct {
@@ -32,6 +42,7 @@ type poolFixture struct {
 	repo     *MockstaleTripRepository
 	gateway  *MockpushGateway
 	reader   *sdkmetric.ManualReader
+	spans    *tracetest.SpanRecorder
 	logs     *bytes.Buffer
 	ctx      context.Context
 	cancel   context.CancelFunc
@@ -48,8 +59,11 @@ func newPoolFixture(t *testing.T, workers, capacity int, requestTimeout time.Dur
 	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
 	t.Cleanup(func() { assert.NoError(t, provider.Shutdown(context.Background())) })
 	meter := provider.Meter("positions-test")
+	spans := tracetest.NewSpanRecorder()
+	traces := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spans))
+	t.Cleanup(func() { assert.NoError(t, traces.Shutdown(context.Background())) })
 	logs := &bytes.Buffer{}
-	logger := slog.New(slog.NewJSONHandler(logs, nil))
+	logger := telemetry.NewLogger(logs, slog.LevelInfo, "trip-service")
 	gateway := NewMockpushGateway(ctrl)
 	requester, err := positions.NewRequester(gateway, logger, meter)
 	require.NoError(t, err)
@@ -60,7 +74,7 @@ func newPoolFixture(t *testing.T, workers, capacity int, requestTimeout time.Dur
 		Workers:       workers,
 		QueueSize:     capacity,
 	}
-	pool, err := positions.NewPool(repo, requester, logger, meter, settings, requestTimeout)
+	pool, err := positions.NewPool(repo, requester, logger, meter, traces.Tracer("positions-test"), settings, requestTimeout)
 	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	scanCtx, stopScan := context.WithCancel(ctx)
@@ -88,6 +102,7 @@ func newPoolFixture(t *testing.T, workers, capacity int, requestTimeout time.Dur
 		repo:     repo,
 		gateway:  gateway,
 		reader:   reader,
+		spans:    spans,
 		logs:     logs,
 		ctx:      ctx,
 		cancel:   cancel,
@@ -127,25 +142,46 @@ func (f *poolFixture) stop(t *testing.T) {
 
 func (f *poolFixture) results(t *testing.T, name string) map[string]int64 {
 	t.Helper()
+	return counterResults(t, collectMetric(t, f.reader, name))
+}
+
+func (f *poolFixture) gauge(t *testing.T, name string) int64 {
+	t.Helper()
+	gauge, ok := collectMetric(t, f.reader, name).Data.(metricdata.Gauge[int64])
+	require.True(t, ok)
+	require.Len(t, gauge.DataPoints, 1)
+	assert.Zero(t, gauge.DataPoints[0].Attributes.Len())
+	return gauge.DataPoints[0].Value
+}
+
+func collectMetric(t *testing.T, reader *sdkmetric.ManualReader, name string) metricdata.Metrics {
+	t.Helper()
 	var metrics metricdata.ResourceMetrics
-	require.NoError(t, f.reader.Collect(t.Context(), &metrics))
+	require.NoError(t, reader.Collect(t.Context(), &metrics))
 	for _, scope := range metrics.ScopeMetrics {
 		for _, instrument := range scope.Metrics {
-			if instrument.Name != name {
-				continue
+			if instrument.Name == name {
+				return instrument
 			}
-			sum, ok := instrument.Data.(metricdata.Sum[int64])
-			require.True(t, ok)
-			results := make(map[string]int64, len(sum.DataPoints))
-			for _, point := range sum.DataPoints {
-				result, ok := point.Attributes.Value(attribute.Key("result"))
-				require.True(t, ok)
-				results[result.AsString()] = point.Value
-			}
-			return results
 		}
 	}
-	return nil
+	return metricdata.Metrics{}
+}
+
+func counterResults(t *testing.T, instrument metricdata.Metrics) map[string]int64 {
+	t.Helper()
+	if instrument.Data == nil {
+		return nil
+	}
+	sum, ok := instrument.Data.(metricdata.Sum[int64])
+	require.True(t, ok)
+	results := make(map[string]int64, len(sum.DataPoints))
+	for _, point := range sum.DataPoints {
+		result, ok := point.Attributes.Value(attribute.Key("result"))
+		require.True(t, ok)
+		results[result.AsString()] = point.Value
+	}
+	return results
 }
 
 func waitValue[T any](t *testing.T, ctx context.Context, source <-chan T) T {
@@ -191,14 +227,18 @@ func TestPoolDeduplicatesAndDropsWithoutBlocking(t *testing.T) {
 	f.scan(t, queued, active, dropped)
 	f.scan(t)
 	assert.Equal(t, map[string]int64{"queued": 2, "duplicate": 2, "dropped": 1}, f.results(t, "tripgo.stale_checks"))
-	assert.Empty(t, f.results(t, "tripgo.position_requests"))
+	assert.Empty(t, f.results(t, positionRequestsMetric))
+	assert.EqualValues(t, 1, f.gauge(t, queueSizeMetric))
+	assert.EqualValues(t, 1, f.gauge(t, activeWorkersMetric))
 	close(release)
 	waitValue(t, f.ctx, queuedStarted)
 	f.scan(t, dropped)
 	f.scan(t)
 	f.stop(t)
 
-	assert.Equal(t, map[string]int64{resultSuccess: 3}, f.results(t, "tripgo.position_requests"))
+	assert.Equal(t, map[string]int64{resultSuccess: 3}, f.results(t, positionRequestsMetric))
+	assert.Zero(t, f.gauge(t, queueSizeMetric))
+	assert.Zero(t, f.gauge(t, activeWorkersMetric))
 	assert.Contains(t, f.logs.String(), `"level":"WARN"`)
 	assert.Contains(t, f.logs.String(), dropped.ID.String())
 }
@@ -229,10 +269,10 @@ func TestPoolSkipsCancelledQueueEntryAfterReschedule(t *testing.T) {
 	f.pool.Cancel(t.Context(), cancelled.ID)
 	f.scan(t, cancelled)
 	f.scan(t)
-	assert.Equal(t, map[string]int64{"cancelled": 1}, f.results(t, "tripgo.position_requests"))
+	assert.Equal(t, map[string]int64{"cancelled": 1}, f.results(t, positionRequestsMetric))
 	close(release)
 	f.stop(t)
-	assert.Equal(t, map[string]int64{resultSuccess: 3, "cancelled": 1}, f.results(t, "tripgo.position_requests"))
+	assert.Equal(t, map[string]int64{resultSuccess: 3, "cancelled": 1}, f.results(t, positionRequestsMetric))
 }
 
 func TestPoolProcessesAllTripsWithConfiguredWorkerCount(t *testing.T) {
@@ -267,7 +307,7 @@ func TestPoolProcessesAllTripsWithConfiguredWorkerCount(t *testing.T) {
 	waitValue(t, f.ctx, f.scanDone)
 	close(release)
 	waitValue(t, f.ctx, f.done)
-	assert.Equal(t, map[string]int64{resultSuccess: int64(len(trips))}, f.results(t, "tripgo.position_requests"))
+	assert.Equal(t, map[string]int64{resultSuccess: int64(len(trips))}, f.results(t, positionRequestsMetric))
 }
 
 func TestPoolContinuesAfterPushErrorAndAppliesTaskTimeout(t *testing.T) {
@@ -286,7 +326,7 @@ func TestPoolContinuesAfterPushErrorAndAppliesTaskTimeout(t *testing.T) {
 	f.scan(t, failed, timedOut, next)
 	f.scan(t)
 	f.stop(t)
-	assert.Equal(t, map[string]int64{resultSuccess: 1, "error": 2}, f.results(t, "tripgo.position_requests"))
+	assert.Equal(t, map[string]int64{resultSuccess: 1, resultError: 2}, f.results(t, positionRequestsMetric))
 	assert.Contains(t, f.logs.String(), "push unavailable")
 	assert.Contains(t, f.logs.String(), "context deadline exceeded")
 }
@@ -350,4 +390,43 @@ func TestPoolCancelsScanAndActiveWorker(t *testing.T) {
 	assert.ErrorIs(t, waitValue(t, waitCtx, requestStopped), context.Canceled)
 	waitValue(t, waitCtx, f.scanDone)
 	waitValue(t, waitCtx, f.done)
+}
+
+func TestPoolLinksWorkSpanToItsScan(t *testing.T) {
+	f := newPoolFixture(t, 1, 1, time.Minute)
+	trip := newTrip()
+	scanned := make(chan trace.SpanContext, 1)
+	f.repo.EXPECT().ListStaleTrips(gomock.Any(), staleAfter).
+		DoAndReturn(func(ctx context.Context, _ time.Duration) ([]model.StaleTrip, error) {
+			scanned <- trace.SpanContextFromContext(ctx)
+			return []model.StaleTrip{trip}, nil
+		})
+	f.gateway.EXPECT().RequestPosition(gomock.Any(), trip.DriverID, trip.ID).Return(errors.New("push failed"))
+	f.sendTick(t)
+	scanSpan := waitValue(t, f.ctx, scanned)
+	require.True(t, scanSpan.IsValid())
+	f.scan(t)
+	f.stop(t)
+
+	var workSpan sdktrace.ReadOnlySpan
+	for _, span := range f.spans.Ended() {
+		if span.Name() == "positions.process" {
+			workSpan = span
+			break
+		}
+	}
+	require.NotNil(t, workSpan)
+	assert.False(t, workSpan.Parent().IsValid())
+	assert.NotEqual(t, scanSpan.TraceID(), workSpan.SpanContext().TraceID())
+	assert.Equal(t, codes.Error, workSpan.Status().Code)
+	require.Len(t, workSpan.Links(), 1)
+	assert.True(t, workSpan.Links()[0].SpanContext.Equal(scanSpan))
+	var record map[string]any
+	require.NoError(t, json.Unmarshal(f.logs.Bytes(), &record))
+	assert.Equal(t, "trip-service", record["service"])
+	assert.Equal(t, "WARN", record["level"])
+	assert.NotEmpty(t, record["time"])
+	assert.NotEmpty(t, record["msg"])
+	assert.Equal(t, workSpan.SpanContext().TraceID().String(), record["trace_id"])
+	assert.Equal(t, workSpan.SpanContext().SpanID().String(), record["span_id"])
 }

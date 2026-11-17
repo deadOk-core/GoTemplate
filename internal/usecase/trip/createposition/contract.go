@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/metric"
 
 	"github.com/deadOk-core/GoTemplate/internal/model"
 )
@@ -22,4 +23,8 @@ type txManager interface {
 
 type positionRequestCanceller interface {
 	Cancel(ctx context.Context, tripID uuid.UUID)
+}
+
+type positionCounter interface {
+	Add(ctx context.Context, value int64, options ...metric.AddOption)
 }

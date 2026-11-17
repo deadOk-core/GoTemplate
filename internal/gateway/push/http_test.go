@@ -15,6 +15,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/deadOk-core/GoTemplate/internal/gateway/push"
 )
@@ -147,4 +152,34 @@ func TestRequestPositionClosesUnreadResponse(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("gateway left the response body open")
 	}
+}
+
+func TestRequestPositionPropagatesClientSpan(t *testing.T) {
+	propagator := propagation.TraceContext{}
+	oldPropagator := otel.GetTextMapPropagator()
+	otel.SetTextMapPropagator(propagator)
+	t.Cleanup(func() { otel.SetTextMapPropagator(oldPropagator) })
+	spans := tracetest.NewSpanRecorder()
+	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spans))
+	t.Cleanup(func() { assert.NoError(t, provider.Shutdown(context.Background())) })
+	seen := make(chan trace.SpanContext, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+		seen <- trace.SpanContextFromContext(ctx)
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	gateway := newGateway(t, server, time.Second)
+	ctx, workerSpan := provider.Tracer("test").Start(t.Context(), "worker")
+	defer workerSpan.End()
+	require.NoError(t, gateway.RequestPosition(ctx, uuid.New(), uuid.New()))
+	remote := <-seen
+	require.True(t, remote.IsValid())
+	assert.True(t, remote.IsRemote())
+	ended := spans.Ended()
+	require.Len(t, ended, 1)
+	clientSpan := ended[0]
+	assert.Equal(t, trace.SpanKindClient, clientSpan.SpanKind())
+	assert.True(t, clientSpan.Parent().Equal(workerSpan.SpanContext()))
+	assert.Equal(t, clientSpan.SpanContext().TraceID(), remote.TraceID())
+	assert.Equal(t, clientSpan.SpanContext().SpanID(), remote.SpanID())
 }

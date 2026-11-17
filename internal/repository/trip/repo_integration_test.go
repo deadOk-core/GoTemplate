@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/metric/noop"
 
 	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
 	"github.com/deadOk-core/GoTemplate/internal/infra/postgres/transaction"
@@ -221,7 +222,7 @@ func TestRepositoryTripPositions(t *testing.T) {
 	pool, repository := newTestRepository(t)
 	ctx := t.Context()
 	manager := transaction.NewTransactionManager(pool)
-	creator := createposition.NewUseCase(repository, manager, noopPositionRequestCanceller{})
+	creator := createposition.NewUseCase(repository, manager, noopPositionRequestCanceller{}, noop.Int64Counter{})
 	lister := listpositions.NewUseCase(repository)
 	input := newTestTrip(t, pool)
 	latest := time.Now().UTC().Truncate(time.Microsecond)
@@ -278,7 +279,7 @@ func TestRepositoryPositionDuringFinish(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	manager := transaction.NewTransactionManager(pool)
-	creator := createposition.NewUseCase(repository, manager, noopPositionRequestCanceller{})
+	creator := createposition.NewUseCase(repository, manager, noopPositionRequestCanceller{}, noop.Int64Counter{})
 	input := newTestTrip(t, pool)
 	_, err := repository.Create(ctx, input)
 	require.NoError(t, err)

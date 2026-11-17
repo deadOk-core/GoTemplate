@@ -11,11 +11,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 type Gateway struct {
-	endpoint string
-	client   *http.Client
+	endpoint  string
+	client    *http.Client
+	transport *http.Transport
 }
 
 type HTTPError struct {
@@ -34,11 +36,13 @@ type pushRequest struct {
 }
 
 func NewGateway(baseURL *url.URL, timeout time.Duration) *Gateway {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
 	return &Gateway{
-		endpoint: baseURL.JoinPath("api/v1/push").String(),
+		endpoint:  baseURL.JoinPath("api/v1/push").String(),
+		transport: transport,
 		client: &http.Client{
 			Timeout:   timeout,
-			Transport: http.DefaultTransport.(*http.Transport).Clone(),
+			Transport: otelhttp.NewTransport(transport),
 			CheckRedirect: func(*http.Request, []*http.Request) error {
 				return http.ErrUseLastResponse
 			},
@@ -79,5 +83,5 @@ func (g *Gateway) RequestPosition(ctx context.Context, driverID, tripID uuid.UUI
 }
 
 func (g *Gateway) CloseIdleConnections() {
-	g.client.CloseIdleConnections()
+	g.transport.CloseIdleConnections()
 }

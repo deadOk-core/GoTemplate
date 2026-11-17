@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/deadOk-core/GoTemplate/internal/config"
 	"github.com/deadOk-core/GoTemplate/internal/model"
@@ -19,6 +21,8 @@ type Pool struct {
 	requester      *Requester
 	logger         *slog.Logger
 	checks         metric.Int64Counter
+	tracer         trace.Tracer
+	active         atomic.Int64
 	settings       config.PositionsConfig
 	requestTimeout time.Duration
 	queue          chan *queuedTrip
@@ -27,8 +31,9 @@ type Pool struct {
 }
 
 type queuedTrip struct {
-	trip    model.StaleTrip
-	started bool
+	trip     model.StaleTrip
+	scanSpan trace.SpanContext
+	started  bool
 }
 
 func NewPool(
@@ -36,6 +41,7 @@ func NewPool(
 	requester *Requester,
 	logger *slog.Logger,
 	meter metric.Meter,
+	tracer trace.Tracer,
 	settings config.PositionsConfig,
 	requestTimeout time.Duration,
 ) (*Pool, error) {
@@ -43,16 +49,21 @@ func NewPool(
 	if err != nil {
 		return nil, fmt.Errorf("create stale checks metric: %w", err)
 	}
-	return &Pool{
+	pool := &Pool{
 		repository:     repository,
 		requester:      requester,
 		logger:         logger,
 		checks:         checks,
+		tracer:         tracer,
 		settings:       settings,
 		requestTimeout: requestTimeout,
 		queue:          make(chan *queuedTrip, settings.QueueSize),
 		pending:        make(map[uuid.UUID]*queuedTrip),
-	}, nil
+	}
+	if err := pool.registerGauges(meter); err != nil {
+		return nil, err
+	}
+	return pool, nil
 }
 
 func (p *Pool) Run(scanCtx, workerCtx context.Context) {
@@ -108,8 +119,13 @@ func (p *Pool) process(ctx context.Context, job *queuedTrip) {
 	if !p.claim(job) {
 		return
 	}
+	p.active.Add(1)
+	defer p.active.Add(-1)
 	requestCtx, cancel := context.WithTimeout(ctx, p.requestTimeout)
 	defer cancel()
+	requestCtx, span := p.tracer.Start(requestCtx, "positions.process",
+		trace.WithNewRoot(), trace.WithLinks(trace.Link{SpanContext: job.scanSpan}))
+	defer span.End()
 	p.requester.Request(requestCtx, job.trip)
 
 	p.mu.Lock()

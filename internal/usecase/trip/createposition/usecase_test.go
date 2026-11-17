@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/mock/gomock"
 
 	domaintrip "github.com/deadOk-core/GoTemplate/internal/domain/trip"
@@ -39,7 +40,8 @@ func TestCreatePositionTransaction(t *testing.T) {
 			repo := NewMocktripRepository(ctrl)
 			manager := NewMocktxManager(ctrl)
 			canceller := NewMockpositionRequestCanceller(ctrl)
-			useCase := createposition.NewUseCase(repo, manager, canceller)
+			counter := NewMockpositionCounter(ctrl)
+			useCase := createposition.NewUseCase(repo, manager, canceller, counter)
 			ctx := t.Context()
 			txCtx, cancel := context.WithCancel(ctx)
 			defer cancel()
@@ -62,6 +64,8 @@ func TestCreatePositionTransaction(t *testing.T) {
 			if tt.wantErr == nil {
 				canceller.EXPECT().Cancel(ctx, input.TripID).
 					Do(func(context.Context, uuid.UUID) { assert.True(t, committed) })
+				counter.EXPECT().Add(ctx, int64(1)).
+					Do(func(context.Context, int64, ...metric.AddOption) { assert.True(t, committed) })
 			}
 
 			got, err := useCase.Create(ctx, input.TripID, input.PositionParams)
@@ -78,7 +82,8 @@ func TestCreatePositionTransaction(t *testing.T) {
 
 func TestCreatePositionRejectsInvalidInputBeforeTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	useCase := createposition.NewUseCase(NewMocktripRepository(ctrl), NewMocktxManager(ctrl), NewMockpositionRequestCanceller(ctrl))
+	useCase := createposition.NewUseCase(NewMocktripRepository(ctrl), NewMocktxManager(ctrl),
+		NewMockpositionRequestCanceller(ctrl), NewMockpositionCounter(ctrl))
 	params := domaintrip.PositionParams{RecordedAt: time.Now().Add(2 * time.Minute)}
 	_, err := useCase.Create(t.Context(), uuid.New(), params)
 	var validationErr *domaintrip.ValidationError

@@ -92,11 +92,17 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 
 	pushGateway := push.NewGateway(cfg.Push.HTTPURL, cfg.Push.RequestTimeout)
 	positionsMeter := otel.Meter("trip-service/positions")
+	savedPositions, err := positionsMeter.Int64Counter("tripgo.positions.saved", metric.WithUnit("{position}"))
+	if err != nil {
+		return nil, fmt.Errorf("create positions saved metric: %w", err)
+	}
+	savedPositions.Add(ctx, 0)
 	requester, err := positions.NewRequester(pushGateway, logger, positionsMeter)
 	if err != nil {
 		return nil, err
 	}
-	positionPool, err := positions.NewPool(repository, requester, logger, positionsMeter, cfg.Positions, cfg.Push.RequestTimeout)
+	positionPool, err := positions.NewPool(repository, requester, logger, positionsMeter,
+		otel.Tracer("trip-service/positions"), cfg.Positions, cfg.Push.RequestTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +112,7 @@ func NewContainer(ctx context.Context, cfg config.Config) (*Container, error) {
 	createUseCase := createusecase.NewUseCase(repository, txManager, logger, created)
 	getUseCase := getusecase.NewUseCase(repository)
 	finishUseCase := finishusecase.NewUseCase(repository, txManager, logger, completed)
-	createPositionUseCase := createpositionusecase.NewUseCase(repository, txManager, positionPool)
+	createPositionUseCase := createpositionusecase.NewUseCase(repository, txManager, positionPool, savedPositions)
 	listPositionsUseCase := listpositionsusecase.NewUseCase(repository)
 
 	createHandler := createhandler.NewHandler(createUseCase, logger)
